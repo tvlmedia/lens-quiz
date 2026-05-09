@@ -9,7 +9,7 @@
    - Lens + focal -> only existing T-stops
    - Uses REAL focal lengths from filenames
    - If a user gets something wrong, they must write a memory note
-   - End screen shows all mistakes + notes
+   - End screen shows all mistakes + notes + images
    ============================ */
 
 const GITHUB_API_IMAGES =
@@ -840,26 +840,36 @@ function showResults() {
           ];
 
           return `
-            <div class="mistake-card">
-              <div class="mistake-card-top">
-                <strong>Mistake ${index + 1}</strong>
-                <span>${escapeHTML(q.scene || "")}</span>
+            <div class="mistake-card mistake-card-with-image">
+              <div class="mistake-image-wrap">
+                <img
+                  src="${escapeHTML(q.url)}"
+                  alt="${escapeHTML(q.lens)} ${escapeHTML(q.uiFocal)} T${escapeHTML(q.tStop)}"
+                  loading="lazy"
+                >
               </div>
 
-              <p>
-                <strong>Correct:</strong><br>
-                ${escapeHTML(q.lens)} — ${escapeHTML(q.uiFocal)} — T${escapeHTML(q.tStop)}
-              </p>
+              <div class="mistake-content">
+                <div class="mistake-card-top">
+                  <strong>Mistake ${index + 1}</strong>
+                  <span>${escapeHTML(q.scene || "")}</span>
+                </div>
 
-              <p>
-                <strong>Your guess:</strong><br>
-                ${escapeHTML(guessedParts.join(" — "))}
-              </p>
+                <p>
+                  <strong>Correct:</strong><br>
+                  ${escapeHTML(q.lens)} — ${escapeHTML(q.uiFocal)} — T${escapeHTML(q.tStop)}
+                </p>
 
-              <p>
-                <strong>Your memory note:</strong><br>
-                ${escapeHTML(item.note || "No note written")}
-              </p>
+                <p>
+                  <strong>Your guess:</strong><br>
+                  ${escapeHTML(guessedParts.join(" — "))}
+                </p>
+
+                <p>
+                  <strong>Your memory note:</strong><br>
+                  ${escapeHTML(item.note || "No note written")}
+                </p>
+              </div>
             </div>
           `;
         }).join("")}
