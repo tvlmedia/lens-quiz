@@ -424,3 +424,39 @@ button:disabled {
 .perfect-score {
   color: var(--good);
 }
+.mistake-card-with-image {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.mistake-image-wrap {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #000;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.mistake-image-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.mistake-content {
+  min-width: 0;
+}
+
+@media (max-width: 780px) {
+  .mistake-card-with-image {
+    grid-template-columns: 1fr;
+  }
+
+  .mistake-image-wrap {
+    max-height: 260px;
+  }
+}
