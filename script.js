@@ -1,88 +1,37 @@
 /* ============================
    TVL / IronGlass Lens Quiz
+   Super simpele versie:
+   - Haalt echte image-bestanden uit GitHub map
+   - Pakt 10 random JPG's
+   - Parse lens / focal / t-stop uit filename
    ============================ */
 
-const IMG_BASE = "https://raw.githubusercontent.com/tvlmedia/IronGlass/main/images/";
+const GITHUB_API_IMAGES =
+  "https://api.github.com/repos/tvlmedia/IronGlass/contents/images?ref=main";
 
 const QUIZ_LENGTH = 10;
 
-/*
-  Zet geheime lenzen hier uit.
-  Titan staat dus bewust NIET aan.
-*/
 const ENABLED_LENSES = [
   "IronGlass Red P",
   "IronGlass Sovjet MKII",
   "IronGlass Zeiss Jena",
   "IronGlass Sovjet Medium Format"
+  // "IronGlass Titan Zoom" // geheim, dus uit
 ];
+
+const LENS_SLUG_TO_LABEL = {
+  "ironglass_red_p": "IronGlass Red P",
+  "ironglass_sovjet_mkii": "IronGlass Sovjet MKII",
+  "ironglass_zeiss_jena": "IronGlass Zeiss Jena",
+  "ironglass_sovjet_medium_format": "IronGlass Sovjet Medium Format",
+  "ironglass_titan_zoom": "IronGlass Titan Zoom"
+};
+
+const LENSES = Object.values(LENS_SLUG_TO_LABEL).filter(l =>
+  ENABLED_LENSES.includes(l)
+);
 
 const UI_FOCALS = ["20mm", "28mm", "35mm", "50mm", "85mm", "120mm"];
-
-const LENSES = [
-  "IronGlass Red P",
-  "IronGlass Sovjet MKII",
-  "IronGlass Zeiss Jena",
-  "IronGlass Sovjet Medium Format"
-];
-
-const notes = {
-  "ironglass_sovjet_mkii_120mm": "135mm",
-  "ironglass_sovjet_mkii_50mm": "58mm",
-  "ironglass_sovjet_mkii_35mm": "37mm",
-
-  "ironglass_red_p_50mm": "58mm",
-  "ironglass_red_p_35mm": "37mm",
-
-  "ironglass_zeiss_jena_85mm": "80mm",
-
-  "ironglass_sovjet_medium_format_28mm": "30mm"
-};
-
-const MEASURED_TSTOPS = {
-  "ironglass_sovjet_medium_format": {
-    "120mm": ["4", "2.9"],
-    "90mm":  ["4"],
-    "80mm":  ["4", "2.9"],
-    "65mm":  ["4", "3.8"],
-    "45mm_m35": ["4", "3.9"],
-    "45mm_m50": ["4", "3.9"],
-    "35mm":  ["4", "2.9"],
-    "30mm":  ["4", "3.8"]
-  },
-
-  "ironglass_zeiss_jena": {
-    "120mm": ["4", "2.9"],
-    "80mm":  ["4", "2.8", "1.9"],
-    "50mm":  ["4", "2.8", "1.9"],
-    "35mm":  ["4", "2.8", "2.5"],
-    "28mm":  ["4", "2.9"],
-    "20mm":  ["4", "2.9"]
-  },
-
-  "ironglass_sovjet_mkii": {
-    "135mm": ["4", "2.9"],
-    "85mm":  ["4", "2.8", "2", "1.6"],
-    "58mm":  ["4", "2.9", "2.1"],
-    "37mm":  ["4", "2.9"],
-    "28mm":  ["4", "3.6"],
-    "20mm":  ["4", "3.6"]
-  },
-
-  "ironglass_red_p": {
-    "85mm":  ["4", "2.8", "2.1"],
-    "58mm":  ["4", "2.8", "2.1"],
-    "37mm":  ["4", "2.9"]
-  }
-};
-
-const ALT_FOCAL_OPTIONS = {
-  "ironglass_sovjet_medium_format": {
-    "85mm": ["80mm", "90mm"],
-    "50mm": ["65mm", "45mm_m50"],
-    "35mm": ["35mm", "45mm_m35"]
-  }
-};
 
 const lensDescriptions = {
   "IronGlass Red P": {
@@ -96,24 +45,11 @@ const lensDescriptions = {
   },
   "IronGlass Sovjet Medium Format": {
     text: "Large-format Soviet glass with vintage character and medium-format coverage."
+  },
+  "IronGlass Titan Zoom": {
+    text: "Cleaner zoom lens with large sensor coverage."
   }
 };
-
-/*
-  Modes die in jouw map bestaan:
-  - noflare
-  - flare
-  - doubleflare
-  - bokeh
-
-  We pakken bewust ook _c.jpg eerst, want die zijn exposure corrected.
-*/
-const SCENES = [
-  { scene: "portrait", suffix: "noflare" },
-  { scene: "portrait", suffix: "flare" },
-  { scene: "portrait", suffix: "doubleflare" },
-  { scene: "bokeh", suffix: "bokeh" }
-];
 
 /* ============================
    DOM
@@ -163,22 +99,6 @@ let locked = false;
    Helpers
    ============================ */
 
-function slugFromLabel(label = "") {
-  return String(label).toLowerCase().replace(/\s+/g, "_");
-}
-
-function aliasFor(lensSlug, nominalFocal) {
-  return notes[`${lensSlug}_${nominalFocal}`] || nominalFocal;
-}
-
-function fileTStop(t) {
-  return String(t).replace(/\./g, "_");
-}
-
-function cleanFocalLabel(focal) {
-  return String(focal || "").replace(/_m(35|50)$/i, "");
-}
-
 function shuffle(arr) {
   return [...arr].sort(() => Math.random() - 0.5);
 }
@@ -191,15 +111,6 @@ function unique(arr) {
   return [...new Set(arr)];
 }
 
-function imageExists(url) {
-  return new Promise(resolve => {
-    const img = new Image();
-    img.onload = () => resolve(true);
-    img.onerror = () => resolve(false);
-    img.src = url;
-  });
-}
-
 function getDifficulty() {
   return document.querySelector("input[name='difficulty']:checked")?.value || "easy";
 }
@@ -210,114 +121,192 @@ function pointsPerQuestion() {
   return 3;
 }
 
-function getAllTStopsForDropdown() {
-  const all = [];
+function tstopFromFilePart(part) {
+  // "2_9" -> "2.9"
+  return String(part).replace(/_/g, ".");
+}
 
-  for (const slug of Object.keys(MEASURED_TSTOPS)) {
-    for (const focal of Object.keys(MEASURED_TSTOPS[slug])) {
-      all.push(...MEASURED_TSTOPS[slug][focal]);
+function cleanFocalLabel(focal) {
+  return String(focal || "").replace(/_m(35|50)$/i, "");
+}
+
+/*
+  File focal naar jouw UI focal.
+  Dus Red P 58mm = 50mm in de quiz.
+*/
+function uiFocalFromFileFocal(slug, fileFocal) {
+  const f = String(fileFocal);
+
+  if (slug === "ironglass_red_p") {
+    if (f === "37mm") return "35mm";
+    if (f === "58mm") return "50mm";
+    if (f === "85mm") return "85mm";
+  }
+
+  if (slug === "ironglass_sovjet_mkii") {
+    if (f === "20mm") return "20mm";
+    if (f === "28mm") return "28mm";
+    if (f === "37mm") return "35mm";
+    if (f === "58mm") return "50mm";
+    if (f === "85mm") return "85mm";
+    if (f === "135mm") return "120mm";
+  }
+
+  if (slug === "ironglass_zeiss_jena") {
+    if (f === "20mm") return "20mm";
+    if (f === "28mm") return "28mm";
+    if (f === "35mm") return "35mm";
+    if (f === "50mm") return "50mm";
+    if (f === "80mm") return "85mm";
+    if (f === "120mm") return "120mm";
+  }
+
+  if (slug === "ironglass_sovjet_medium_format") {
+    if (f === "30mm") return "28mm";
+    if (f === "35mm") return "35mm";
+    if (f === "45mm_m35") return "35mm";
+    if (f === "45mm_m50") return "50mm";
+    if (f === "65mm") return "50mm";
+    if (f === "80mm") return "85mm";
+    if (f === "90mm") return "85mm";
+    if (f === "120mm") return "120mm";
+  }
+
+  return cleanFocalLabel(f);
+}
+
+function readableScene(suffix) {
+  if (suffix === "noflare") return "No flare";
+  if (suffix === "flare") return "Flare";
+  if (suffix === "doubleflare") return "Double flare";
+  if (suffix === "bokeh") return "Bokeh";
+  return suffix;
+}
+
+/*
+  Parse filenames zoals:
+  ironglass_red_p_37mm_t2_9_bokeh.jpg
+  ironglass_red_p_37mm_t2_9_bokeh_c.jpg
+  ironglass_zeiss_jena_50mm_t2_8_noflare_c.jpg
+*/
+function parseQuizImage(file) {
+  const name = file.name || "";
+  const url = file.download_url || "";
+
+  if (!name.toLowerCase().endsWith(".jpg")) return null;
+
+  // Geen hidden files / rare files
+  if (!name.startsWith("ironglass_")) return null;
+
+  const match = name.match(/^(.+?)_(\d+mm(?:_m\d+)?)_t([\d_]+)_(noflare|flare|doubleflare|bokeh)(?:_c)?\.jpg$/i);
+
+  if (!match) {
+    return null;
+  }
+
+  const slug = match[1].toLowerCase();
+  const fileFocal = match[2];
+  const tStop = tstopFromFilePart(match[3]);
+  const suffix = match[4].toLowerCase();
+
+  const lens = LENS_SLUG_TO_LABEL[slug];
+
+  if (!lens) return null;
+  if (!ENABLED_LENSES.includes(lens)) return null;
+
+  return {
+    lens,
+    slug,
+    uiFocal: uiFocalFromFileFocal(slug, fileFocal),
+    fileFocal,
+    actualFocal: cleanFocalLabel(fileFocal),
+    tStop,
+    suffix,
+    scene: readableScene(suffix),
+    url,
+    name
+  };
+}
+
+/*
+  Als er zowel normale als _c versie is, kies liever _c.
+*/
+function preferCorrectedVersions(items) {
+  const map = new Map();
+
+  for (const item of items) {
+    const baseKey = item.name.replace(/_c\.jpg$/i, ".jpg");
+    const existing = map.get(baseKey);
+
+    if (!existing) {
+      map.set(baseKey, item);
+      continue;
+    }
+
+    const itemIsCorrected = /_c\.jpg$/i.test(item.name);
+    const existingIsCorrected = /_c\.jpg$/i.test(existing.name);
+
+    if (itemIsCorrected && !existingIsCorrected) {
+      map.set(baseKey, item);
     }
   }
 
-  return unique(all)
+  return [...map.values()];
+}
+
+function getAllTStopsForDropdown(pool = []) {
+  const fromPool = pool.map(q => q.tStop).filter(Boolean);
+
+  const fallback = [
+    "1.6", "1.9", "2", "2.1", "2.5", "2.8", "2.9", "3.6", "3.8", "3.9", "4"
+  ];
+
+  return unique(fromPool.length ? fromPool : fallback)
     .map(String)
     .sort((a, b) => parseFloat(a) - parseFloat(b));
 }
 
-function getEffectiveFocals(lensSlug, uiFocal) {
-  const alt = ALT_FOCAL_OPTIONS?.[lensSlug]?.[uiFocal];
-
-  if (alt && alt.length) {
-    return alt;
-  }
-
-  return [aliasFor(lensSlug, uiFocal)];
-}
-
-function getStopsFor(lensSlug, fileFocal) {
-  return MEASURED_TSTOPS?.[lensSlug]?.[fileFocal] || [];
-}
-
-function buildImageUrlCandidates({ lensSlug, fileFocal, tStop, suffix }) {
-  const t = fileTStop(tStop);
-  const base = `${lensSlug}_${fileFocal}_t${t}`;
-
-  if (suffix === "bokeh") {
-    return [
-      `${IMG_BASE}${base}_bokeh_c.jpg`,
-      `${IMG_BASE}${base}_bokeh.jpg`
-    ];
-  }
-
-  return [
-    `${IMG_BASE}${base}_${suffix}_c.jpg`,
-    `${IMG_BASE}${base}_${suffix}.jpg`
-  ];
-}
-
-async function firstExistingImage(candidates) {
-  for (const url of candidates) {
-    // eslint-disable-next-line no-await-in-loop
-    const ok = await imageExists(url);
-    if (ok) return url;
-  }
-
-  return null;
-}
-
 /* ============================
-   Build quiz image pool
+   GitHub image loading
    ============================ */
 
-async function buildQuizPool() {
-  const pool = [];
+async function loadImagePoolFromGitHub() {
+  startButton.textContent = "Bestanden ophalen...";
 
-  for (const lensLabel of ENABLED_LENSES) {
-    const lensSlug = slugFromLabel(lensLabel);
+  const res = await fetch(GITHUB_API_IMAGES, {
+    cache: "no-store"
+  });
 
-    for (const uiFocal of UI_FOCALS) {
-      const fileFocals = getEffectiveFocals(lensSlug, uiFocal);
-
-      for (const fileFocal of fileFocals) {
-        const stops = getStopsFor(lensSlug, fileFocal);
-
-        if (!stops.length) continue;
-
-        for (const tStop of stops) {
-          for (const scene of SCENES) {
-            const candidates = buildImageUrlCandidates({
-              lensSlug,
-              fileFocal,
-              tStop,
-              suffix: scene.suffix
-            });
-
-            // Check of hij bestaat.
-            // Dit is iets trager bij start, maar voorkomt kapotte quizvragen.
-            // eslint-disable-next-line no-await-in-loop
-            const url = await firstExistingImage(candidates);
-
-            if (!url) continue;
-
-            pool.push({
-              lens: lensLabel,
-              slug: lensSlug,
-              uiFocal,
-              fileFocal,
-              displayFocal: cleanFocalLabel(uiFocal),
-              actualFocal: cleanFocalLabel(fileFocal),
-              tStop: String(tStop),
-              scene: scene.scene,
-              suffix: scene.suffix,
-              url
-            });
-          }
-        }
-      }
-    }
+  if (!res.ok) {
+    throw new Error(`GitHub API error: ${res.status}`);
   }
 
-  return pool;
+  const files = await res.json();
+
+  const parsed = files
+    .map(parseQuizImage)
+    .filter(Boolean);
+
+  const cleaned = preferCorrectedVersions(parsed);
+
+  console.log("Alle parsed quiz images:", parsed.length);
+  console.log("Na _c voorkeur:", cleaned.length);
+  console.log(cleaned);
+
+  return cleaned;
+}
+
+async function buildQuizQuestions() {
+  const pool = await loadImagePoolFromGitHub();
+
+  if (!pool.length) {
+    console.warn("Geen quiz images gevonden. Check filenames/regex.");
+    return [];
+  }
+
+  const shuffled = shuffle(pool);
+
+  return shuffled.slice(0, QUIZ_LENGTH);
 }
 
 /* ============================
@@ -325,6 +314,8 @@ async function buildQuizPool() {
    ============================ */
 
 function fillSelect(select, values, formatter = v => v) {
+  if (!select) return;
+
   select.innerHTML = "";
 
   values.forEach(value => {
@@ -335,12 +326,12 @@ function fillSelect(select, values, formatter = v => v) {
   });
 }
 
-function setupDropdowns() {
-  fillSelect(lensSelect, LENSES.filter(l => ENABLED_LENSES.includes(l)));
+function setupDropdowns(pool = []) {
+  fillSelect(lensSelect, LENSES);
 
   fillSelect(focalSelect, UI_FOCALS);
 
-  fillSelect(tstopSelect, getAllTStopsForDropdown(), value => `T${value}`);
+  fillSelect(tstopSelect, getAllTStopsForDropdown(pool), value => `T${value}`);
 }
 
 function applyDifficultyUI() {
@@ -364,18 +355,24 @@ async function startQuiz() {
   startButton.disabled = true;
   startButton.textContent = "Quiz laden...";
 
-  const pool = await buildQuizPool();
-
-  if (pool.length < QUIZ_LENGTH) {
-    alert(`Niet genoeg werkende beelden gevonden. Gevonden: ${pool.length}`);
+  try {
+    questions = await buildQuizQuestions();
+  } catch (err) {
+    console.error(err);
+    alert("Quiz kon de GitHub images niet ophalen. Check console.");
     startButton.disabled = false;
     startButton.textContent = "Start quiz";
     return;
   }
 
-  questions = shuffle(pool).slice(0, QUIZ_LENGTH);
+  if (questions.length < QUIZ_LENGTH) {
+    alert(`Niet genoeg beelden gevonden. Gevonden: ${questions.length}`);
+    startButton.disabled = false;
+    startButton.textContent = "Start quiz";
+    return;
+  }
 
-  setupDropdowns();
+  setupDropdowns(questions);
   applyDifficultyUI();
 
   liveScore.textContent = String(score);
@@ -403,8 +400,11 @@ function showQuestion() {
   checkButton.classList.remove("hidden");
   nextButton.classList.add("hidden");
 
+  imageLoader.textContent = "Foto laden...";
   imageLoader.classList.remove("hidden");
+
   quizImage.style.opacity = "0";
+  quizImage.removeAttribute("src");
 
   quizImage.onload = () => {
     imageLoader.classList.add("hidden");
@@ -412,6 +412,7 @@ function showQuestion() {
   };
 
   quizImage.onerror = () => {
+    console.error("Image kon niet laden:", q.url, q);
     imageLoader.textContent = "Foto kon niet laden. Klik volgende.";
     checkButton.classList.add("hidden");
     nextButton.classList.remove("hidden");
@@ -423,12 +424,10 @@ function showQuestion() {
 }
 
 function randomizeGuesses() {
-  const enabled = LENSES.filter(l => ENABLED_LENSES.includes(l));
-
-  lensSelect.value = pickRandom(enabled);
+  lensSelect.value = pickRandom(LENSES);
   focalSelect.value = pickRandom(UI_FOCALS);
 
-  const stops = getAllTStopsForDropdown();
+  const stops = getAllTStopsForDropdown(questions);
   tstopSelect.value = pickRandom(stops);
 }
 
@@ -493,7 +492,16 @@ function checkAnswer() {
 }
 
 function renderFeedback(data) {
-  const { q, guessedLens, guessedFocal, guessedTStop, lensGood, focalGood, tstopGood, roundScore } = data;
+  const {
+    q,
+    guessedLens,
+    guessedFocal,
+    guessedTStop,
+    lensGood,
+    focalGood,
+    tstopGood,
+    roundScore
+  } = data;
 
   const possible = pointsPerQuestion();
 
@@ -523,6 +531,10 @@ function renderFeedback(data) {
     ? `<br><small>Werkelijke/file focal: ${q.actualFocal}</small>`
     : "";
 
+  const sceneText = q.scene
+    ? `<br><small>Scene: ${q.scene}</small>`
+    : "";
+
   feedbackBox.innerHTML = `
     <h3>${roundScore} / ${possible} punten</h3>
 
@@ -540,6 +552,7 @@ function renderFeedback(data) {
       <strong>Correct antwoord:</strong><br>
       ${q.lens} — ${q.uiFocal} — T${q.tStop}
       ${actualFocalText}
+      ${sceneText}
       <br><br>
       <small>${lensDescriptions[q.lens]?.text || ""}</small>
     </div>
@@ -618,4 +631,4 @@ nextButton.addEventListener("click", nextQuestion);
    Initial
    ============================ */
 
-setupDropdowns();
+setupDropdowns([]);
