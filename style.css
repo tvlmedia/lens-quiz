@@ -344,3 +344,83 @@ select:focus {
     width: 100%;
   }
 }
+.disabled,
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.mistake-note-box {
+  margin-top: 16px;
+  padding: 16px;
+  background: rgba(255, 77, 77, 0.08);
+  border: 1px solid rgba(255, 77, 77, 0.25);
+  border-radius: 16px;
+}
+
+.mistake-note-box textarea {
+  width: 100%;
+  margin-top: 8px;
+  background: #111;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  font: inherit;
+  resize: vertical;
+  outline: none;
+}
+
+.mistake-note-box textarea:focus {
+  border-color: var(--accent);
+}
+
+.note-warning {
+  display: block;
+  margin-top: 8px;
+  color: var(--bad);
+}
+
+.good-note {
+  color: var(--good);
+}
+
+.mistakes-summary {
+  margin-top: 26px;
+}
+
+.mistakes-summary h2 {
+  font-size: 28px;
+  margin-bottom: 14px;
+}
+
+.mistake-card {
+  background: #0b0b0b;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 16px;
+  margin-top: 12px;
+}
+
+.mistake-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+
+.mistake-card p {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.mistake-card strong {
+  color: var(--text);
+}
+
+.perfect-score {
+  color: var(--good);
+}
