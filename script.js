@@ -1,7 +1,8 @@
 /* ============================
    TVL / IronGlass Lens Quiz
    - Loads real image files from GitHub
-   - Picks 10 random JPGs
+   - Picks 1 random image per lens
+   - Every lens appears max. once per game
    - Dropdowns start with placeholders
    - Lens -> only existing focals
    - Lens + focal -> only existing T-stops
@@ -11,8 +12,6 @@
 const GITHUB_API_IMAGES =
   "https://api.github.com/repos/tvlmedia/IronGlass/contents/images?ref=main";
 
-const QUIZ_LENGTH = 10;
-
 const ENABLED_LENSES = [
   "IronGlass Red P",
   "IronGlass Sovjet MKII",
@@ -20,6 +19,9 @@ const ENABLED_LENSES = [
   "IronGlass Sovjet Medium Format",
   "IronGlass Titan Zoom"
 ];
+
+// One question per lens, so no lens can appear twice in one game.
+const QUIZ_LENGTH = ENABLED_LENSES.length;
 
 const LENS_SLUG_TO_LABEL = {
   "ironglass_red_p": "IronGlass Red P",
@@ -33,6 +35,10 @@ const LENSES = Object.values(LENS_SLUG_TO_LABEL).filter(l =>
   ENABLED_LENSES.includes(l)
 );
 
+/*
+  Quiz uses real focal lengths from filenames.
+  So Red P 58mm stays 58mm.
+*/
 const UI_FOCALS = [
   "20mm",
   "28mm",
@@ -120,6 +126,10 @@ let locked = false;
 
 function shuffle(arr) {
   return [...arr].sort(() => Math.random() - 0.5);
+}
+
+function pickRandom(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
 }
 
 function unique(arr) {
@@ -277,7 +287,20 @@ async function buildQuizQuestions() {
     return [];
   }
 
-  return shuffle(imagePool).slice(0, QUIZ_LENGTH);
+  const questionsByLens = [];
+
+  for (const lens of ENABLED_LENSES) {
+    const imagesForLens = imagePool.filter(q => q.lens === lens);
+
+    if (!imagesForLens.length) {
+      console.warn(`No images found for lens: ${lens}`);
+      continue;
+    }
+
+    questionsByLens.push(pickRandom(imagesForLens));
+  }
+
+  return shuffle(questionsByLens).slice(0, QUIZ_LENGTH);
 }
 
 /* ============================
@@ -463,7 +486,7 @@ async function startQuiz() {
   }
 
   if (questions.length < QUIZ_LENGTH) {
-    alert(`Not enough images found. Found: ${questions.length}`);
+    alert(`Not enough images found. Found: ${questions.length}. Check if every enabled lens has at least one valid image.`);
     startButton.disabled = false;
     startButton.textContent = "Start quiz";
     return;
