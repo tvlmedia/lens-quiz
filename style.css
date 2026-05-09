@@ -1,545 +1,106 @@
-:root {
-  --bg: #050505;
-  --panel: #101010;
-  --panel-2: #171717;
-  --text: #f5f5f5;
-  --muted: #9b9b9b;
-  --line: #2a2a2a;
-  --accent: #ff6a00;
-  --accent-soft: rgba(255, 106, 0, 0.18);
-  --good: #35d07f;
-  --bad: #ff4d4d;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at top, rgba(255, 106, 0, 0.14), transparent 35%),
-    linear-gradient(180deg, #090909, var(--bg));
-  color: var(--text);
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-
-.app {
-  width: min(1120px, calc(100% - 32px));
-  margin: 0 auto;
-  padding: 32px 0;
-}
-
-.card {
-  background: rgba(16, 16, 16, 0.94);
-  border: 1px solid var(--line);
-  border-radius: 28px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
-  padding: 28px;
-}
-
-.hidden {
-  display: none !important;
-}
-
-.eyebrow {
-  color: var(--accent);
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  font-size: 12px;
-  font-weight: 800;
-  margin-bottom: 10px;
-}
-
-h1,
-h2 {
-  margin: 0;
-  line-height: 1.05;
-}
-
-h1 {
-  font-size: clamp(40px, 7vw, 82px);
-  letter-spacing: -0.06em;
-}
-
-h2 {
-  font-size: clamp(26px, 4vw, 42px);
-  letter-spacing: -0.04em;
-}
-
-.intro {
-  color: var(--muted);
-  max-width: 700px;
-  font-size: 18px;
-  line-height: 1.55;
-  margin: 18px 0 26px;
-}
-
-.start-card,
-.result-card {
-  min-height: calc(100vh - 64px);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.difficulty-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
-  margin: 12px 0 28px;
-}
-
-.difficulty-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  padding: 16px;
-  cursor: pointer;
-  transition: 0.2s ease;
-}
-
-.difficulty-card:hover {
-  border-color: rgba(255, 106, 0, 0.7);
-  transform: translateY(-1px);
-}
-
-.difficulty-card input {
-  accent-color: var(--accent);
-}
-
-.difficulty-card strong {
-  display: block;
-  font-size: 16px;
-}
-
-.difficulty-card small {
-  display: block;
-  color: var(--muted);
-  margin-top: 3px;
-}
-
-.main-button,
-.secondary-button {
-  appearance: none;
-  border: 0;
-  border-radius: 999px;
-  padding: 14px 22px;
-  font-weight: 850;
-  letter-spacing: -0.01em;
-  cursor: pointer;
-  transition: 0.2s ease;
-  font-size: 15px;
-}
-
-.main-button {
-  background: var(--accent);
-  color: #000;
-}
-
-.main-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 30px rgba(255, 106, 0, 0.25);
-}
-
-.secondary-button {
-  background: #242424;
-  color: var(--text);
-  border: 1px solid var(--line);
-}
-
-.secondary-button:hover {
-  border-color: var(--accent);
-}
-
-.quiz-card {
-  padding: 20px;
-}
-
-.quiz-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: center;
-  margin-bottom: 18px;
-}
-
-.score-pill {
-  flex: 0 0 auto;
-  background: var(--accent-soft);
-  color: var(--accent);
-  border: 1px solid rgba(255, 106, 0, 0.35);
-  border-radius: 999px;
-  padding: 10px 14px;
-  font-weight: 850;
-}
-
-.image-wrap {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  background: #000;
-  border: 1px solid var(--line);
-  border-radius: 24px;
-  overflow: hidden;
-}
-
-.image-wrap img {
-  width: 100%;
-  height: 100%;
-  display: block;
-  object-fit: contain;
-  background: #000;
-}
-
-.image-loader {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  color: var(--muted);
-  background: #050505;
-  z-index: 2;
-}
-
-.answer-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
-  margin-top: 18px;
-}
-
-label span {
-  display: block;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 750;
-  margin-bottom: 8px;
-}
-
-select {
-  width: 100%;
-  background: #151515;
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 13px 12px;
-  font-size: 15px;
-  outline: none;
-}
-
-select:focus {
-  border-color: var(--accent);
-}
-
-.button-row {
-  display: flex;
-  gap: 10px;
-  margin-top: 18px;
-  flex-wrap: wrap;
-}
-
-.feedback {
-  margin-top: 18px;
-  background: #0b0b0b;
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  padding: 18px;
-}
-
-.feedback h3 {
-  margin: 0 0 12px;
-  font-size: 22px;
-}
-
-.feedback-line {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 0;
-  border-top: 1px solid var(--line);
-}
-
-.feedback-line:first-of-type {
-  border-top: 0;
-}
-
-.feedback-line strong {
-  color: var(--muted);
-}
-
-.good {
-  color: var(--good);
-  font-weight: 850;
-}
-
-.bad {
-  color: var(--bad);
-  font-weight: 850;
-}
-
-.correct-answer {
-  margin-top: 14px;
-  padding: 14px;
-  background: var(--accent-soft);
-  border: 1px solid rgba(255, 106, 0, 0.28);
-  border-radius: 16px;
-}
-
-.breakdown {
-  display: grid;
-  gap: 8px;
-  margin: 22px 0;
-  color: var(--muted);
-}
-
-.breakdown-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-@media (max-width: 780px) {
-  .app {
-    width: min(100% - 18px, 1120px);
-    padding: 9px 0;
-  }
-
-  .card {
-    border-radius: 20px;
-    padding: 18px;
-  }
-
-  .start-card,
-  .result-card {
-    min-height: calc(100vh - 18px);
-  }
-
-  .difficulty-grid,
-  .answer-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .quiz-top {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .score-pill {
-    width: 100%;
-    text-align: center;
-  }
-
-  .image-wrap {
-    border-radius: 16px;
-  }
-
-  .button-row button {
-    width: 100%;
-  }
-}
-.disabled,
-button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  transform: none !important;
-  box-shadow: none !important;
-}
-
-.mistake-note-box {
-  margin-top: 16px;
-  padding: 16px;
-  background: rgba(255, 77, 77, 0.08);
-  border: 1px solid rgba(255, 77, 77, 0.25);
-  border-radius: 16px;
-}
-
-.mistake-note-box textarea {
-  width: 100%;
-  margin-top: 8px;
-  background: #111;
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 12px;
-  font: inherit;
-  resize: vertical;
-  outline: none;
-}
-
-.mistake-note-box textarea:focus {
-  border-color: var(--accent);
-}
-
-.note-warning {
-  display: block;
-  margin-top: 8px;
-  color: var(--bad);
-}
-
-.good-note {
-  color: var(--good);
-}
-
-.mistakes-summary {
-  margin-top: 26px;
-}
-
-.mistakes-summary h2 {
-  font-size: 28px;
-  margin-bottom: 14px;
-}
-
-.mistake-card {
-  background: #0b0b0b;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  padding: 16px;
-  margin-top: 12px;
-}
-
-.mistake-card-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  color: var(--accent);
-  margin-bottom: 12px;
-}
-
-.mistake-card p {
-  color: var(--muted);
-  line-height: 1.45;
-}
-
-.mistake-card strong {
-  color: var(--text);
-}
-
-.perfect-score {
-  color: var(--good);
-}
-.mistake-card-with-image {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 18px;
-  align-items: start;
-}
-
-.mistake-image-wrap {
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  background: #000;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  overflow: hidden;
-}
-
-.mistake-image-wrap img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.mistake-content {
-  min-width: 0;
-}
-
-@media (max-width: 780px) {
-  .mistake-card-with-image {
-    grid-template-columns: 1fr;
-  }
-
-  .mistake-image-wrap {
-    max-height: 260px;
-  }
-}
-.mistakes-summary-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.mistake-image-button {
-  appearance: none;
-  padding: 0;
-  cursor: zoom-in;
-}
-
-.mistake-image-button:hover img {
-  transform: scale(1.04);
-}
-
-.mistake-image-wrap img {
-  transition: transform 0.22s ease;
-}
-
-.image-lightbox {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  display: none;
-  place-items: center;
-  padding: 28px;
-  background: rgba(0, 0, 0, 0.88);
-  backdrop-filter: blur(10px);
-}
-
-.image-lightbox.active {
-  display: grid;
-}
-
-.image-lightbox-inner {
-  width: min(1200px, 96vw);
-}
-
-.image-lightbox-inner img {
-  width: 100%;
-  max-height: 82vh;
-  object-fit: contain;
-  display: block;
-  background: #000;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-}
-
-.image-lightbox-title {
-  color: var(--text);
-  text-align: center;
-  margin-top: 12px;
-  font-weight: 800;
-}
-
-.image-lightbox-close {
-  position: fixed;
-  top: 18px;
-  right: 22px;
-  width: 44px;
-  height: 44px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: #111;
-  color: white;
-  font-size: 30px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-@media (max-width: 780px) {
-  .mistakes-summary-top {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .image-lightbox {
-    padding: 12px;
-  }
-}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>IronGlass Lens Quiz</title>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app">
+    <section id="startScreen" class="card start-card">
+      <div class="eyebrow">TVL Rental / IronGlass</div>
+      <h1>Lens Quiz</h1>
+      <p class="intro">
+        Think you can recognize vintage glass? You’ll get 10 random images.
+        Guess the lens, focal length and, if you dare, the T-stop.
+      </p>
+
+      <div class="difficulty-grid">
+        <label class="difficulty-card">
+          <input type="radio" name="difficulty" value="easy" checked />
+          <span>
+            <strong>Easy</strong>
+            <small>Guess the lens only</small>
+          </span>
+        </label>
+
+        <label class="difficulty-card">
+          <input type="radio" name="difficulty" value="medium" />
+          <span>
+            <strong>Medium</strong>
+            <small>Lens + focal length</small>
+          </span>
+        </label>
+
+        <label class="difficulty-card">
+          <input type="radio" name="difficulty" value="hard" />
+          <span>
+            <strong>Hard</strong>
+            <small>Lens + focal length + T-stop</small>
+          </span>
+        </label>
+      </div>
+
+      <button id="startButton" class="main-button">Start quiz</button>
+    </section>
+
+    <section id="quizScreen" class="card quiz-card hidden">
+      <div class="quiz-top">
+        <div>
+          <div class="eyebrow">IronGlass Lens Quiz</div>
+          <h2 id="roundTitle">Round 1 / 10</h2>
+        </div>
+
+        <div class="score-pill">
+          Score: <span id="liveScore">0</span>
+        </div>
+      </div>
+
+      <div class="image-wrap">
+        <div id="imageLoader" class="image-loader">Loading image...</div>
+        <img id="quizImage" alt="Lens quiz image" />
+      </div>
+
+      <div class="answer-grid">
+        <label>
+          <span>Which lens?</span>
+          <select id="lensSelect"></select>
+        </label>
+
+        <label id="focalField">
+          <span>Which focal length?</span>
+          <select id="focalSelect"></select>
+        </label>
+
+        <label id="tstopField">
+          <span>Which T-stop?</span>
+          <select id="tstopSelect"></select>
+        </label>
+      </div>
+
+      <div class="button-row">
+        <button id="checkButton" class="main-button">Check answer</button>
+        <button id="nextButton" class="secondary-button hidden">Next image</button>
+      </div>
+
+      <div id="feedbackBox" class="feedback hidden"></div>
+    </section>
+
+    <section id="resultScreen" class="card result-card hidden">
+      <div class="eyebrow">Quiz complete</div>
+      <h1 id="resultTitle">Your score</h1>
+      <p id="resultText"></p>
+
+      <div id="breakdownBox" class="breakdown"></div>
+
+      <button id="restartButton" class="main-button">Play again</button>
+    </section>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
