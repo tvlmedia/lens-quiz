@@ -10,6 +10,8 @@
    - Uses REAL focal lengths from filenames
    - If a user gets something wrong, they must write a memory note
    - End screen shows all mistakes + notes + images
+   - Click result image = lightbox
+   - Export mistakes PDF
    ============================ */
 
 const GITHUB_API_IMAGES =
@@ -37,10 +39,6 @@ const LENSES = Object.values(LENS_SLUG_TO_LABEL).filter(l =>
   ENABLED_LENSES.includes(l)
 );
 
-/*
-  Quiz uses real focal lengths from filenames.
-  So Red P 58mm stays 58mm.
-*/
 const UI_FOCALS = [
   "20mm",
   "28mm",
@@ -152,6 +150,10 @@ function isRoundMistake(roundScore) {
   return roundScore < pointsPerQuestion();
 }
 
+function getMistakes() {
+  return history.filter(h => isRoundMistake(h.roundScore));
+}
+
 function escapeHTML(str = "") {
   return String(str)
     .replaceAll("&", "&amp;")
@@ -194,13 +196,6 @@ function tstopSort(a, b) {
   return parseFloat(a) - parseFloat(b);
 }
 
-/*
-  Parses filenames like:
-  ironglass_red_p_37mm_t2_9_bokeh.jpg
-  ironglass_red_p_37mm_t2_9_bokeh_c.jpg
-  ironglass_zeiss_jena_50mm_t2_8_noflare_c.jpg
-  ironglass_sovjet_medium_format_45mm_m50_t3_9_noflare_c.jpg
-*/
 function parseQuizImage(file) {
   const name = file.name || "";
   const url = file.download_url || "";
@@ -238,9 +233,6 @@ function parseQuizImage(file) {
   };
 }
 
-/*
-  If both normal and _c versions exist, prefer _c.
-*/
 function preferCorrectedVersions(items) {
   const map = new Map();
 
@@ -262,6 +254,255 @@ function preferCorrectedVersions(items) {
   }
 
   return [...map.values()];
+}
+
+/* ============================
+   Lightbox
+   ============================ */
+
+function openImageLightbox(url, title = "") {
+  let lightbox = document.getElementById("imageLightbox");
+
+  if (!lightbox) {
+    lightbox = document.createElement("div");
+    lightbox.id = "imageLightbox";
+    lightbox.className = "image-lightbox";
+    lightbox.innerHTML = `
+      <button class="image-lightbox-close" type="button">×</button>
+      <div class="image-lightbox-inner">
+        <img id="imageLightboxImg" alt="">
+        <div id="imageLightboxTitle" class="image-lightbox-title"></div>
+      </div>
+    `;
+    document.body.appendChild(lightbox);
+
+    lightbox.addEventListener("click", (e) => {
+      if (
+        e.target === lightbox ||
+        e.target.classList.contains("image-lightbox-close")
+      ) {
+        lightbox.classList.remove("active");
+      }
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        lightbox.classList.remove("active");
+      }
+    });
+  }
+
+  const img = document.getElementById("imageLightboxImg");
+  const titleEl = document.getElementById("imageLightboxTitle");
+
+  img.src = url;
+  img.alt = title;
+  titleEl.textContent = title;
+
+  lightbox.classList.add("active");
+}
+
+/* ============================
+   PDF export
+   ============================ */
+
+function loadImageForPdf(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+
+    img.src = url;
+  });
+}
+
+function fitContain(sw, sh, bw, bh) {
+  const s = Math.min(bw / sw, bh / sh);
+
+  return {
+    w: sw * s,
+    h: sh * s,
+    x: (bw - sw * s) / 2,
+    y: (bh - sh * s) / 2
+  };
+}
+
+async function exportMistakesPdf() {
+  const mistakes = getMistakes();
+
+  if (!mistakes.length) {
+    alert("No mistakes to export.");
+    return;
+  }
+
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert("jsPDF is not loaded.");
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+
+  const pdf = new jsPDF({
+    orientation: "landscape",
+    unit: "pt",
+    format: "a4"
+  });
+
+  const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+
+  const margin = 32;
+  const accent = [255, 106, 0];
+
+  function drawHeader(title, subtitle = "") {
+    pdf.setFillColor(0, 0, 0);
+    pdf.rect(0, 0, pageW, pageH, "F");
+
+    pdf.setTextColor(...accent);
+    pdf.setFontSize(10);
+    pdf.setFont("helvetica", "bold");
+    pdf.text("TVL RENTAL / IRONGLASS LENS QUIZ", margin, 34);
+
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(28);
+    pdf.text(title, margin, 70);
+
+    if (subtitle) {
+      pdf.setTextColor(170, 170, 170);
+      pdf.setFontSize(12);
+      pdf.setFont("helvetica", "normal");
+      pdf.text(subtitle, margin, 94);
+    }
+  }
+
+  drawHeader(
+    "Mistakes & Memory Notes",
+    `Score: ${score} / ${maxScore} points - ${difficulty.toUpperCase()} mode`
+  );
+
+  pdf.setTextColor(220, 220, 220);
+  pdf.setFontSize(12);
+
+  let y = 130;
+
+  pdf.text(`Total mistakes: ${mistakes.length}`, margin, y);
+  y += 28;
+
+  mistakes.forEach((item, index) => {
+    const q = item.question;
+
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(14);
+    pdf.setFont("helvetica", "bold");
+    pdf.text(`${index + 1}. ${q.lens} - ${q.uiFocal} - T${q.tStop}`, margin, y);
+
+    pdf.setTextColor(...accent);
+    pdf.setFontSize(11);
+    pdf.text(q.scene || "", pageW - margin - 110, y);
+
+    y += 20;
+
+    pdf.setTextColor(170, 170, 170);
+    pdf.setFontSize(10);
+    pdf.setFont("helvetica", "normal");
+
+    const note = item.note || "No note written";
+    const lines = pdf.splitTextToSize(`Note: ${note}`, pageW - margin * 2 - 20);
+
+    pdf.text(lines, margin + 12, y);
+    y += Math.min(lines.length * 12, 48) + 18;
+
+    if (y > pageH - 80 && index < mistakes.length - 1) {
+      pdf.addPage();
+      drawHeader("Mistakes & Memory Notes");
+      y = 120;
+    }
+  });
+
+  for (let i = 0; i < mistakes.length; i++) {
+    const item = mistakes[i];
+    const q = item.question;
+
+    pdf.addPage();
+    drawHeader(
+      `Mistake ${i + 1}`,
+      `${q.lens} - ${q.uiFocal} - T${q.tStop} - ${q.scene || ""}`
+    );
+
+    const imageBox = {
+      x: margin,
+      y: 120,
+      w: 360,
+      h: 270
+    };
+
+    try {
+      const img = await loadImageForPdf(q.url);
+      const fit = fitContain(img.naturalWidth, img.naturalHeight, imageBox.w, imageBox.h);
+
+      pdf.addImage(
+        img,
+        "JPEG",
+        imageBox.x + fit.x,
+        imageBox.y + fit.y,
+        fit.w,
+        fit.h
+      );
+    } catch (e) {
+      pdf.setTextColor(255, 80, 80);
+      pdf.text("Image could not be loaded.", imageBox.x, imageBox.y + 20);
+    }
+
+    const textX = imageBox.x + imageBox.w + 32;
+    let textY = imageBox.y + 10;
+
+    const guessedParts = [
+      item.guessedLens || "No lens",
+      item.guessedFocal || "No focal",
+      item.guessedTStop ? `T${item.guessedTStop}` : "No T-stop"
+    ];
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(13);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("Correct:", textX, textY);
+    textY += 18;
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(180, 180, 180);
+    pdf.text(`${q.lens} - ${q.uiFocal} - T${q.tStop}`, textX, textY);
+    textY += 34;
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("Your guess:", textX, textY);
+    textY += 18;
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(180, 180, 180);
+    pdf.text(guessedParts.join(" - "), textX, textY);
+    textY += 34;
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("Your memory note:", textX, textY);
+    textY += 18;
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(180, 180, 180);
+
+    const noteLines = pdf.splitTextToSize(
+      item.note || "No note written",
+      pageW - textX - margin
+    );
+
+    pdf.text(noteLines, textX, textY);
+  }
+
+  const fileName = `IronGlass_Lens_Quiz_Mistakes_${difficulty}_${score}_of_${maxScore}.pdf`;
+  pdf.save(fileName);
 }
 
 /* ============================
@@ -798,7 +1039,7 @@ function showResults() {
   const focalHits = history.filter(h => h.focalGood).length;
   const tstopHits = history.filter(h => h.tstopGood).length;
 
-  const mistakes = history.filter(h => isRoundMistake(h.roundScore));
+  const mistakes = getMistakes();
 
   let rows = `
     <div class="breakdown-row">
@@ -828,7 +1069,12 @@ function showResults() {
   if (mistakes.length) {
     rows += `
       <div class="mistakes-summary">
-        <h2>Your mistakes & memory notes</h2>
+        <div class="mistakes-summary-top">
+          <h2>Your mistakes & memory notes</h2>
+          <button id="exportPdfButton" class="secondary-button" type="button">
+            Export mistakes PDF
+          </button>
+        </div>
 
         ${mistakes.map((item, index) => {
           const q = item.question;
@@ -841,13 +1087,18 @@ function showResults() {
 
           return `
             <div class="mistake-card mistake-card-with-image">
-              <div class="mistake-image-wrap">
+              <button
+                class="mistake-image-wrap mistake-image-button"
+                type="button"
+                data-img="${escapeHTML(q.url)}"
+                data-title="${escapeHTML(`${q.lens} - ${q.uiFocal} - T${q.tStop}`)}"
+              >
                 <img
                   src="${escapeHTML(q.url)}"
                   alt="${escapeHTML(q.lens)} ${escapeHTML(q.uiFocal)} T${escapeHTML(q.tStop)}"
                   loading="lazy"
                 >
-              </div>
+              </button>
 
               <div class="mistake-content">
                 <div class="mistake-card-top">
@@ -885,6 +1136,20 @@ function showResults() {
   }
 
   breakdownBox.innerHTML = rows;
+
+  const exportButton = document.getElementById("exportPdfButton");
+  if (exportButton) {
+    exportButton.addEventListener("click", exportMistakesPdf);
+  }
+
+  document.querySelectorAll(".mistake-image-button").forEach(button => {
+    button.addEventListener("click", () => {
+      openImageLightbox(
+        button.dataset.img,
+        button.dataset.title
+      );
+    });
+  });
 }
 
 function restartQuiz() {
