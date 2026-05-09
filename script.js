@@ -3,7 +3,9 @@
    Super simpele versie:
    - Haalt echte image-bestanden uit GitHub map
    - Pakt 10 random JPG's
-   - Parse lens / focal / t-stop uit filename
+   - Dropdowns starten leeg/placeholder
+   - Lens -> toont alleen bestaande focals
+   - Lens + focal -> toont alleen bestaande T-stops
    ============================ */
 
 const GITHUB_API_IMAGES =
@@ -89,6 +91,7 @@ const breakdownBox = document.getElementById("breakdownBox");
 
 let difficulty = "easy";
 let questions = [];
+let imagePool = [];
 let currentIndex = 0;
 let score = 0;
 let maxScore = 10;
@@ -101,10 +104,6 @@ let locked = false;
 
 function shuffle(arr) {
   return [...arr].sort(() => Math.random() - 0.5);
-}
-
-function pickRandom(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
 }
 
 function unique(arr) {
@@ -122,7 +121,6 @@ function pointsPerQuestion() {
 }
 
 function tstopFromFilePart(part) {
-  // "2_9" -> "2.9"
   return String(part).replace(/_/g, ".");
 }
 
@@ -183,6 +181,18 @@ function readableScene(suffix) {
   return suffix;
 }
 
+function focalSort(a, b) {
+  const ai = UI_FOCALS.indexOf(a);
+  const bi = UI_FOCALS.indexOf(b);
+
+  if (ai !== -1 && bi !== -1) return ai - bi;
+  return parseFloat(a) - parseFloat(b);
+}
+
+function tstopSort(a, b) {
+  return parseFloat(a) - parseFloat(b);
+}
+
 /*
   Parse filenames zoals:
   ironglass_red_p_37mm_t2_9_bokeh.jpg
@@ -194,15 +204,11 @@ function parseQuizImage(file) {
   const url = file.download_url || "";
 
   if (!name.toLowerCase().endsWith(".jpg")) return null;
-
-  // Geen hidden files / rare files
   if (!name.startsWith("ironglass_")) return null;
 
   const match = name.match(/^(.+?)_(\d+mm(?:_m\d+)?)_t([\d_]+)_(noflare|flare|doubleflare|bokeh)(?:_c)?\.jpg$/i);
 
-  if (!match) {
-    return null;
-  }
+  if (!match) return null;
 
   const slug = match[1].toLowerCase();
   const fileFocal = match[2];
@@ -254,18 +260,6 @@ function preferCorrectedVersions(items) {
   return [...map.values()];
 }
 
-function getAllTStopsForDropdown(pool = []) {
-  const fromPool = pool.map(q => q.tStop).filter(Boolean);
-
-  const fallback = [
-    "1.6", "1.9", "2", "2.1", "2.5", "2.8", "2.9", "3.6", "3.8", "3.9", "4"
-  ];
-
-  return unique(fromPool.length ? fromPool : fallback)
-    .map(String)
-    .sort((a, b) => parseFloat(a) - parseFloat(b));
-}
-
 /* ============================
    GitHub image loading
    ============================ */
@@ -297,26 +291,31 @@ async function loadImagePoolFromGitHub() {
 }
 
 async function buildQuizQuestions() {
-  const pool = await loadImagePoolFromGitHub();
+  imagePool = await loadImagePoolFromGitHub();
 
-  if (!pool.length) {
+  if (!imagePool.length) {
     console.warn("Geen quiz images gevonden. Check filenames/regex.");
     return [];
   }
 
-  const shuffled = shuffle(pool);
-
-  return shuffled.slice(0, QUIZ_LENGTH);
+  return shuffle(imagePool).slice(0, QUIZ_LENGTH);
 }
 
 /* ============================
-   UI setup
+   Dynamic dropdown logic
    ============================ */
 
-function fillSelect(select, values, formatter = v => v) {
+function fillSelectWithPlaceholder(select, placeholder, values, formatter = v => v) {
   if (!select) return;
 
   select.innerHTML = "";
+
+  const ph = document.createElement("option");
+  ph.value = "";
+  ph.textContent = placeholder;
+  ph.disabled = true;
+  ph.selected = true;
+  select.appendChild(ph);
 
   values.forEach(value => {
     const option = document.createElement("option");
@@ -326,17 +325,141 @@ function fillSelect(select, values, formatter = v => v) {
   });
 }
 
-function setupDropdowns(pool = []) {
-  fillSelect(lensSelect, LENSES);
+function getAvailableLensesFromPool() {
+  return unique(imagePool.map(q => q.lens))
+    .filter(l => ENABLED_LENSES.includes(l));
+}
 
-  fillSelect(focalSelect, UI_FOCALS);
+function getAvailableFocalsForLens(lens) {
+  return unique(
+    imagePool
+      .filter(q => q.lens === lens)
+      .map(q => q.uiFocal)
+      .filter(Boolean)
+  ).sort(focalSort);
+}
 
-  fillSelect(tstopSelect, getAllTStopsForDropdown(pool), value => `T${value}`);
+function getAvailableTStopsForLensAndFocal(lens, uiFocal) {
+  return unique(
+    imagePool
+      .filter(q => q.lens === lens && q.uiFocal === uiFocal)
+      .map(q => q.tStop)
+      .filter(Boolean)
+  ).sort(tstopSort);
+}
+
+function resetGuessDropdowns() {
+  const lenses = getAvailableLensesFromPool();
+
+  fillSelectWithPlaceholder(
+    lensSelect,
+    "Guess your lens",
+    lenses.length ? lenses : LENSES
+  );
+
+  fillSelectWithPlaceholder(
+    focalSelect,
+    "Guess focal length",
+    []
+  );
+
+  fillSelectWithPlaceholder(
+    tstopSelect,
+    "Guess T-stop",
+    [],
+    value => `T${value}`
+  );
+
+  focalSelect.disabled = true;
+  tstopSelect.disabled = true;
+}
+
+function updateFocalOptionsAfterLensChoice() {
+  const lens = lensSelect.value;
+
+  fillSelectWithPlaceholder(
+    focalSelect,
+    "Guess focal length",
+    []
+  );
+
+  fillSelectWithPlaceholder(
+    tstopSelect,
+    "Guess T-stop",
+    [],
+    value => `T${value}`
+  );
+
+  focalSelect.disabled = true;
+  tstopSelect.disabled = true;
+
+  if (!lens) return;
+
+  const focals = getAvailableFocalsForLens(lens);
+
+  fillSelectWithPlaceholder(
+    focalSelect,
+    "Guess focal length",
+    focals
+  );
+
+  focalSelect.disabled = false;
+
+  /*
+    Bij Easy is focal verborgen, maar we hoeven hem niet te gebruiken.
+    Bij Medium/Hard moet user bewust kiezen.
+  */
+}
+
+function updateTStopOptionsAfterFocalChoice() {
+  const lens = lensSelect.value;
+  const focal = focalSelect.value;
+
+  fillSelectWithPlaceholder(
+    tstopSelect,
+    "Guess T-stop",
+    [],
+    value => `T${value}`
+  );
+
+  tstopSelect.disabled = true;
+
+  if (!lens || !focal) return;
+
+  const tstops = getAvailableTStopsForLensAndFocal(lens, focal);
+
+  fillSelectWithPlaceholder(
+    tstopSelect,
+    "Guess T-stop",
+    tstops,
+    value => `T${value}`
+  );
+
+  tstopSelect.disabled = false;
 }
 
 function applyDifficultyUI() {
   focalField.classList.toggle("hidden", difficulty === "easy");
   tstopField.classList.toggle("hidden", difficulty !== "hard");
+}
+
+function validateGuessBeforeCheck() {
+  if (!lensSelect.value) {
+    alert("Kies eerst een lens.");
+    return false;
+  }
+
+  if (difficulty !== "easy" && !focalSelect.value) {
+    alert("Kies eerst een focal length.");
+    return false;
+  }
+
+  if (difficulty === "hard" && !tstopSelect.value) {
+    alert("Kies eerst een T-stop.");
+    return false;
+  }
+
+  return true;
 }
 
 /* ============================
@@ -372,7 +495,6 @@ async function startQuiz() {
     return;
   }
 
-  setupDropdowns(questions);
   applyDifficultyUI();
 
   liveScore.textContent = String(score);
@@ -420,19 +542,13 @@ function showQuestion() {
 
   quizImage.src = q.url;
 
-  randomizeGuesses();
-}
-
-function randomizeGuesses() {
-  lensSelect.value = pickRandom(LENSES);
-  focalSelect.value = pickRandom(UI_FOCALS);
-
-  const stops = getAllTStopsForDropdown(questions);
-  tstopSelect.value = pickRandom(stops);
+  resetGuessDropdowns();
 }
 
 function checkAnswer() {
   if (locked) return;
+  if (!validateGuessBeforeCheck()) return;
+
   locked = true;
 
   const q = questions[currentIndex];
@@ -627,8 +743,11 @@ restartButton.addEventListener("click", restartQuiz);
 checkButton.addEventListener("click", checkAnswer);
 nextButton.addEventListener("click", nextQuestion);
 
+lensSelect.addEventListener("change", updateFocalOptionsAfterLensChoice);
+focalSelect.addEventListener("change", updateTStopOptionsAfterFocalChoice);
+
 /* ============================
    Initial
    ============================ */
 
-setupDropdowns([]);
+resetGuessDropdowns();
