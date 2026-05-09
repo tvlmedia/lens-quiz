@@ -8,6 +8,8 @@
    - Lens -> only existing focals
    - Lens + focal -> only existing T-stops
    - Uses REAL focal lengths from filenames
+   - If a user gets something wrong, they must write a memory note
+   - End screen shows all mistakes + notes
    ============================ */
 
 const GITHUB_API_IMAGES =
@@ -144,6 +146,19 @@ function pointsPerQuestion() {
   if (difficulty === "easy") return 1;
   if (difficulty === "medium") return 2;
   return 3;
+}
+
+function isRoundMistake(roundScore) {
+  return roundScore < pointsPerQuestion();
+}
+
+function escapeHTML(str = "") {
+  return String(str)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function tstopFromFilePart(part) {
@@ -545,6 +560,8 @@ function showQuestion() {
 
   checkButton.classList.remove("hidden");
   nextButton.classList.add("hidden");
+  nextButton.disabled = false;
+  nextButton.classList.remove("disabled");
 
   imageLoader.textContent = "Loading image...";
   imageLoader.classList.remove("hidden");
@@ -562,6 +579,8 @@ function showQuestion() {
     imageLoader.textContent = "Image could not load. Click next.";
     checkButton.classList.add("hidden");
     nextButton.classList.remove("hidden");
+    nextButton.disabled = false;
+    nextButton.classList.remove("disabled");
   };
 
   quizImage.src = q.url;
@@ -605,7 +624,7 @@ function checkAnswer() {
   score += roundScore;
   liveScore.textContent = String(score);
 
-  history.push({
+  const resultEntry = {
     question: q,
     guessedLens,
     guessedFocal,
@@ -613,8 +632,11 @@ function checkAnswer() {
     lensGood,
     focalGood,
     tstopGood,
-    roundScore
-  });
+    roundScore,
+    note: ""
+  };
+
+  history.push(resultEntry);
 
   renderFeedback({
     q,
@@ -624,11 +646,20 @@ function checkAnswer() {
     lensGood,
     focalGood,
     tstopGood,
-    roundScore
+    roundScore,
+    historyEntry: resultEntry
   });
 
   checkButton.classList.add("hidden");
   nextButton.classList.remove("hidden");
+
+  if (isRoundMistake(roundScore)) {
+    nextButton.disabled = true;
+    nextButton.classList.add("disabled");
+  } else {
+    nextButton.disabled = false;
+    nextButton.classList.remove("disabled");
+  }
 }
 
 function renderFeedback(data) {
@@ -640,17 +671,19 @@ function renderFeedback(data) {
     lensGood,
     focalGood,
     tstopGood,
-    roundScore
+    roundScore,
+    historyEntry
   } = data;
 
   const possible = pointsPerQuestion();
+  const mistake = isRoundMistake(roundScore);
 
   const focalLine = difficulty !== "easy"
     ? `
       <div class="feedback-line">
         <strong>Focal</strong>
         <span class="${focalGood ? "good" : "bad"}">
-          ${focalGood ? "Correct" : `Wrong — you chose ${guessedFocal}`}
+          ${focalGood ? "Correct" : `Wrong — you chose ${escapeHTML(guessedFocal)}`}
         </span>
       </div>
     `
@@ -661,14 +694,32 @@ function renderFeedback(data) {
       <div class="feedback-line">
         <strong>T-stop</strong>
         <span class="${tstopGood ? "good" : "bad"}">
-          ${tstopGood ? "Correct" : `Wrong — you chose T${guessedTStop}`}
+          ${tstopGood ? "Correct" : `Wrong — you chose T${escapeHTML(guessedTStop)}`}
         </span>
       </div>
     `
     : "";
 
   const sceneText = q.scene
-    ? `<br><small>Scene: ${q.scene}</small>`
+    ? `<br><small>Scene: ${escapeHTML(q.scene)}</small>`
+    : "";
+
+  const noteBox = mistake
+    ? `
+      <div class="mistake-note-box">
+        <label>
+          <span>Memory note required</span>
+          <textarea
+            id="mistakeNoteInput"
+            rows="4"
+            placeholder="What could help you recognize this next time? Example: softer contrast, wild flare, smoother faces, larger format feel..."
+          ></textarea>
+        </label>
+        <small id="noteRequirementText" class="note-warning">
+          Write a short note before going to the next image.
+        </small>
+      </div>
+    `
     : "";
 
   feedbackBox.innerHTML = `
@@ -677,7 +728,7 @@ function renderFeedback(data) {
     <div class="feedback-line">
       <strong>Lens</strong>
       <span class="${lensGood ? "good" : "bad"}">
-        ${lensGood ? "Correct" : `Wrong — you chose ${guessedLens}`}
+        ${lensGood ? "Correct" : `Wrong — you chose ${escapeHTML(guessedLens)}`}
       </span>
     </div>
 
@@ -686,17 +737,44 @@ function renderFeedback(data) {
 
     <div class="correct-answer">
       <strong>Correct answer:</strong><br>
-      ${q.lens} — ${q.uiFocal} — T${q.tStop}
+      ${escapeHTML(q.lens)} — ${escapeHTML(q.uiFocal)} — T${escapeHTML(q.tStop)}
       ${sceneText}
       <br><br>
-      <small>${lensDescriptions[q.lens]?.text || ""}</small>
+      <small>${escapeHTML(lensDescriptions[q.lens]?.text || "")}</small>
     </div>
+
+    ${noteBox}
   `;
 
   feedbackBox.classList.remove("hidden");
+
+  if (mistake) {
+    const noteInput = document.getElementById("mistakeNoteInput");
+    const noteRequirementText = document.getElementById("noteRequirementText");
+
+    noteInput.addEventListener("input", () => {
+      const value = noteInput.value.trim();
+      historyEntry.note = value;
+
+      const valid = value.length >= 3;
+
+      nextButton.disabled = !valid;
+      nextButton.classList.toggle("disabled", !valid);
+
+      if (valid) {
+        noteRequirementText.textContent = "Saved. You can continue.";
+        noteRequirementText.classList.add("good-note");
+      } else {
+        noteRequirementText.textContent = "Write a short note before going to the next image.";
+        noteRequirementText.classList.remove("good-note");
+      }
+    });
+  }
 }
 
 function nextQuestion() {
+  if (nextButton.disabled) return;
+
   currentIndex++;
 
   if (currentIndex >= QUIZ_LENGTH) {
@@ -720,6 +798,8 @@ function showResults() {
   const focalHits = history.filter(h => h.focalGood).length;
   const tstopHits = history.filter(h => h.tstopGood).length;
 
+  const mistakes = history.filter(h => isRoundMistake(h.roundScore));
+
   let rows = `
     <div class="breakdown-row">
       <span>Lens correct</span>
@@ -741,6 +821,55 @@ function showResults() {
       <div class="breakdown-row">
         <span>T-stop correct</span>
         <strong>${tstopHits} / ${QUIZ_LENGTH}</strong>
+      </div>
+    `;
+  }
+
+  if (mistakes.length) {
+    rows += `
+      <div class="mistakes-summary">
+        <h2>Your mistakes & memory notes</h2>
+
+        ${mistakes.map((item, index) => {
+          const q = item.question;
+
+          const guessedParts = [
+            item.guessedLens || "No lens",
+            item.guessedFocal || "No focal",
+            item.guessedTStop ? `T${item.guessedTStop}` : "No T-stop"
+          ];
+
+          return `
+            <div class="mistake-card">
+              <div class="mistake-card-top">
+                <strong>Mistake ${index + 1}</strong>
+                <span>${escapeHTML(q.scene || "")}</span>
+              </div>
+
+              <p>
+                <strong>Correct:</strong><br>
+                ${escapeHTML(q.lens)} — ${escapeHTML(q.uiFocal)} — T${escapeHTML(q.tStop)}
+              </p>
+
+              <p>
+                <strong>Your guess:</strong><br>
+                ${escapeHTML(guessedParts.join(" — "))}
+              </p>
+
+              <p>
+                <strong>Your memory note:</strong><br>
+                ${escapeHTML(item.note || "No note written")}
+              </p>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `;
+  } else {
+    rows += `
+      <div class="mistakes-summary">
+        <h2>No mistakes</h2>
+        <p class="perfect-score">Clean run. No memory notes needed.</p>
       </div>
     `;
   }
