@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="nl">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -14,8 +14,8 @@
       <div class="eyebrow">TVL Rental / IronGlass</div>
       <h1>Lens Quiz</h1>
       <p class="intro">
-        Denk jij dat je vintage glas kunt herkennen? Je krijgt 10 willekeurige foto’s te zien.
-        Raad de lens, focal length en eventueel T-stop.
+        Think you can recognize vintage glass? You’ll get 10 random images.
+        Guess the lens, focal length and, if you dare, the T-stop.
       </p>
 
       <div class="difficulty-grid">
@@ -23,7 +23,7 @@
           <input type="radio" name="difficulty" value="easy" checked />
           <span>
             <strong>Easy</strong>
-            <small>Alleen lens raden</small>
+            <small>Guess the lens only</small>
           </span>
         </label>
 
@@ -51,7 +51,7 @@
       <div class="quiz-top">
         <div>
           <div class="eyebrow">IronGlass Lens Quiz</div>
-          <h2 id="roundTitle">Ronde 1 / 10</h2>
+          <h2 id="roundTitle">Round 1 / 10</h2>
         </div>
 
         <div class="score-pill">
@@ -60,43 +60,43 @@
       </div>
 
       <div class="image-wrap">
-        <div id="imageLoader" class="image-loader">Foto laden...</div>
-        <img id="quizImage" alt="Lens quiz foto" />
+        <div id="imageLoader" class="image-loader">Loading image...</div>
+        <img id="quizImage" alt="Lens quiz image" />
       </div>
 
       <div class="answer-grid">
         <label>
-          <span>Welke lens?</span>
+          <span>Which lens?</span>
           <select id="lensSelect"></select>
         </label>
 
         <label id="focalField">
-          <span>Welke focal length?</span>
+          <span>Which focal length?</span>
           <select id="focalSelect"></select>
         </label>
 
         <label id="tstopField">
-          <span>Welke T-stop?</span>
+          <span>Which T-stop?</span>
           <select id="tstopSelect"></select>
         </label>
       </div>
 
       <div class="button-row">
-        <button id="checkButton" class="main-button">Check antwoord</button>
-        <button id="nextButton" class="secondary-button hidden">Volgende foto</button>
+        <button id="checkButton" class="main-button">Check answer</button>
+        <button id="nextButton" class="secondary-button hidden">Next image</button>
       </div>
 
       <div id="feedbackBox" class="feedback hidden"></div>
     </section>
 
     <section id="resultScreen" class="card result-card hidden">
-      <div class="eyebrow">Quiz klaar</div>
-      <h1 id="resultTitle">Je score</h1>
+      <div class="eyebrow">Quiz complete</div>
+      <h1 id="resultTitle">Your score</h1>
       <p id="resultText"></p>
 
       <div id="breakdownBox" class="breakdown"></div>
 
-      <button id="restartButton" class="main-button">Opnieuw spelen</button>
+      <button id="restartButton" class="main-button">Play again</button>
     </section>
   </main>
 
