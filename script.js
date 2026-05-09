@@ -17,8 +17,8 @@ const ENABLED_LENSES = [
   "IronGlass Red P",
   "IronGlass Sovjet MKII",
   "IronGlass Zeiss Jena",
-  "IronGlass Sovjet Medium Format"
-  // "IronGlass Titan Zoom" // geheim, dus uit
+  "IronGlass Sovjet Medium Format",
+  "IronGlass Titan Zoom"
 ];
 
 const LENS_SLUG_TO_LABEL = {
