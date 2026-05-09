@@ -460,3 +460,86 @@ button:disabled {
     max-height: 260px;
   }
 }
+.mistakes-summary-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.mistake-image-button {
+  appearance: none;
+  padding: 0;
+  cursor: zoom-in;
+}
+
+.mistake-image-button:hover img {
+  transform: scale(1.04);
+}
+
+.mistake-image-wrap img {
+  transition: transform 0.22s ease;
+}
+
+.image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: none;
+  place-items: center;
+  padding: 28px;
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(10px);
+}
+
+.image-lightbox.active {
+  display: grid;
+}
+
+.image-lightbox-inner {
+  width: min(1200px, 96vw);
+}
+
+.image-lightbox-inner img {
+  width: 100%;
+  max-height: 82vh;
+  object-fit: contain;
+  display: block;
+  background: #000;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+
+.image-lightbox-title {
+  color: var(--text);
+  text-align: center;
+  margin-top: 12px;
+  font-weight: 800;
+}
+
+.image-lightbox-close {
+  position: fixed;
+  top: 18px;
+  right: 22px;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #111;
+  color: white;
+  font-size: 30px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+@media (max-width: 780px) {
+  .mistakes-summary-top {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .image-lightbox {
+    padding: 12px;
+  }
+}
