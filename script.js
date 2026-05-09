@@ -1,11 +1,11 @@
 /* ============================
    TVL / IronGlass Lens Quiz
-   Super simpele versie:
    - Haalt echte image-bestanden uit GitHub map
    - Pakt 10 random JPG's
-   - Dropdowns starten leeg/placeholder
+   - Dropdowns starten met placeholders
    - Lens -> toont alleen bestaande focals
    - Lens + focal -> toont alleen bestaande T-stops
+   - Gebruikt ECHTE focal lengths uit filenames
    ============================ */
 
 const GITHUB_API_IMAGES =
@@ -33,7 +33,26 @@ const LENSES = Object.values(LENS_SLUG_TO_LABEL).filter(l =>
   ENABLED_LENSES.includes(l)
 );
 
-const UI_FOCALS = ["20mm", "28mm", "35mm", "50mm", "85mm", "120mm"];
+/*
+  Quiz gebruikt echte focal lengths uit de filenames.
+  Dus Red P 58mm blijft 58mm.
+*/
+const UI_FOCALS = [
+  "20mm",
+  "28mm",
+  "30mm",
+  "35mm",
+  "37mm",
+  "45mm",
+  "50mm",
+  "58mm",
+  "65mm",
+  "80mm",
+  "85mm",
+  "90mm",
+  "120mm",
+  "135mm"
+];
 
 const lensDescriptions = {
   "IronGlass Red P": {
@@ -128,49 +147,16 @@ function cleanFocalLabel(focal) {
   return String(focal || "").replace(/_m(35|50)$/i, "");
 }
 
-/*
-  File focal naar jouw UI focal.
-  Dus Red P 58mm = 50mm in de quiz.
-*/
 function uiFocalFromFileFocal(slug, fileFocal) {
-  const f = String(fileFocal);
-
-  if (slug === "ironglass_red_p") {
-    if (f === "37mm") return "35mm";
-    if (f === "58mm") return "50mm";
-    if (f === "85mm") return "85mm";
-  }
-
-  if (slug === "ironglass_sovjet_mkii") {
-    if (f === "20mm") return "20mm";
-    if (f === "28mm") return "28mm";
-    if (f === "37mm") return "35mm";
-    if (f === "58mm") return "50mm";
-    if (f === "85mm") return "85mm";
-    if (f === "135mm") return "120mm";
-  }
-
-  if (slug === "ironglass_zeiss_jena") {
-    if (f === "20mm") return "20mm";
-    if (f === "28mm") return "28mm";
-    if (f === "35mm") return "35mm";
-    if (f === "50mm") return "50mm";
-    if (f === "80mm") return "85mm";
-    if (f === "120mm") return "120mm";
-  }
-
-  if (slug === "ironglass_sovjet_medium_format") {
-    if (f === "30mm") return "28mm";
-    if (f === "35mm") return "35mm";
-    if (f === "45mm_m35") return "35mm";
-    if (f === "45mm_m50") return "50mm";
-    if (f === "65mm") return "50mm";
-    if (f === "80mm") return "85mm";
-    if (f === "90mm") return "85mm";
-    if (f === "120mm") return "120mm";
-  }
-
-  return cleanFocalLabel(f);
+  /*
+    Belangrijk:
+    De quiz gebruikt echte focal lengths uit de bestandsnaam.
+    Dus:
+    - ironglass_red_p_58mm... = 58mm
+    - ironglass_red_p_37mm... = 37mm
+    - ironglass_sovjet_mkii_135mm... = 135mm
+  */
+  return cleanFocalLabel(fileFocal);
 }
 
 function readableScene(suffix) {
@@ -186,6 +172,7 @@ function focalSort(a, b) {
   const bi = UI_FOCALS.indexOf(b);
 
   if (ai !== -1 && bi !== -1) return ai - bi;
+
   return parseFloat(a) - parseFloat(b);
 }
 
@@ -198,6 +185,7 @@ function tstopSort(a, b) {
   ironglass_red_p_37mm_t2_9_bokeh.jpg
   ironglass_red_p_37mm_t2_9_bokeh_c.jpg
   ironglass_zeiss_jena_50mm_t2_8_noflare_c.jpg
+  ironglass_sovjet_medium_format_45mm_m50_t3_9_noflare_c.jpg
 */
 function parseQuizImage(file) {
   const name = file.name || "";
@@ -206,7 +194,9 @@ function parseQuizImage(file) {
   if (!name.toLowerCase().endsWith(".jpg")) return null;
   if (!name.startsWith("ironglass_")) return null;
 
-  const match = name.match(/^(.+?)_(\d+mm(?:_m\d+)?)_t([\d_]+)_(noflare|flare|doubleflare|bokeh)(?:_c)?\.jpg$/i);
+  const match = name.match(
+    /^(.+?)_(\d+mm(?:_m\d+)?)_t([\d_]+)_(noflare|flare|doubleflare|bokeh)(?:_c)?\.jpg$/i
+  );
 
   if (!match) return null;
 
@@ -404,11 +394,6 @@ function updateFocalOptionsAfterLensChoice() {
   );
 
   focalSelect.disabled = false;
-
-  /*
-    Bij Easy is focal verborgen, maar we hoeven hem niet te gebruiken.
-    Bij Medium/Hard moet user bewust kiezen.
-  */
 }
 
 function updateTStopOptionsAfterFocalChoice() {
@@ -643,10 +628,6 @@ function renderFeedback(data) {
     `
     : "";
 
-  const actualFocalText = q.actualFocal !== q.uiFocal
-    ? `<br><small>Werkelijke/file focal: ${q.actualFocal}</small>`
-    : "";
-
   const sceneText = q.scene
     ? `<br><small>Scene: ${q.scene}</small>`
     : "";
@@ -667,7 +648,6 @@ function renderFeedback(data) {
     <div class="correct-answer">
       <strong>Correct antwoord:</strong><br>
       ${q.lens} — ${q.uiFocal} — T${q.tStop}
-      ${actualFocalText}
       ${sceneText}
       <br><br>
       <small>${lensDescriptions[q.lens]?.text || ""}</small>
