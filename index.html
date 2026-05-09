@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>IronGlass Lens Quiz</title>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app">
+    <section id="startScreen" class="card start-card">
+      <div class="eyebrow">TVL Rental / IronGlass</div>
+      <h1>Lens Quiz</h1>
+      <p class="intro">
+        Denk jij dat je vintage glas kunt herkennen? Je krijgt 10 willekeurige foto’s te zien.
+        Raad de lens, focal length en eventueel T-stop.
+      </p>
+
+      <div class="difficulty-grid">
+        <label class="difficulty-card">
+          <input type="radio" name="difficulty" value="easy" checked />
+          <span>
+            <strong>Easy</strong>
+            <small>Alleen lens raden</small>
+          </span>
+        </label>
+
+        <label class="difficulty-card">
+          <input type="radio" name="difficulty" value="medium" />
+          <span>
+            <strong>Medium</strong>
+            <small>Lens + focal length</small>
+          </span>
+        </label>
+
+        <label class="difficulty-card">
+          <input type="radio" name="difficulty" value="hard" />
+          <span>
+            <strong>Hard</strong>
+            <small>Lens + focal length + T-stop</small>
+          </span>
+        </label>
+      </div>
+
+      <button id="startButton" class="main-button">Start quiz</button>
+    </section>
+
+    <section id="quizScreen" class="card quiz-card hidden">
+      <div class="quiz-top">
+        <div>
+          <div class="eyebrow">IronGlass Lens Quiz</div>
+          <h2 id="roundTitle">Ronde 1 / 10</h2>
+        </div>
+
+        <div class="score-pill">
+          Score: <span id="liveScore">0</span>
+        </div>
+      </div>
+
+      <div class="image-wrap">
+        <div id="imageLoader" class="image-loader">Foto laden...</div>
+        <img id="quizImage" alt="Lens quiz foto" />
+      </div>
+
+      <div class="answer-grid">
+        <label>
+          <span>Welke lens?</span>
+          <select id="lensSelect"></select>
+        </label>
+
+        <label id="focalField">
+          <span>Welke focal length?</span>
+          <select id="focalSelect"></select>
+        </label>
+
+        <label id="tstopField">
+          <span>Welke T-stop?</span>
+          <select id="tstopSelect"></select>
+        </label>
+      </div>
+
+      <div class="button-row">
+        <button id="checkButton" class="main-button">Check antwoord</button>
+        <button id="nextButton" class="secondary-button hidden">Volgende foto</button>
+      </div>
+
+      <div id="feedbackBox" class="feedback hidden"></div>
+    </section>
+
+    <section id="resultScreen" class="card result-card hidden">
+      <div class="eyebrow">Quiz klaar</div>
+      <h1 id="resultTitle">Je score</h1>
+      <p id="resultText"></p>
+
+      <div id="breakdownBox" class="breakdown"></div>
+
+      <button id="restartButton" class="main-button">Opnieuw spelen</button>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
