@@ -1,11 +1,11 @@
 /* ============================
    TVL / IronGlass Lens Quiz
-   - Haalt echte image-bestanden uit GitHub map
-   - Pakt 10 random JPG's
-   - Dropdowns starten met placeholders
-   - Lens -> toont alleen bestaande focals
-   - Lens + focal -> toont alleen bestaande T-stops
-   - Gebruikt ECHTE focal lengths uit filenames
+   - Loads real image files from GitHub
+   - Picks 10 random JPGs
+   - Dropdowns start with placeholders
+   - Lens -> only existing focals
+   - Lens + focal -> only existing T-stops
+   - Uses REAL focal lengths from filenames
    ============================ */
 
 const GITHUB_API_IMAGES =
@@ -33,13 +33,10 @@ const LENSES = Object.values(LENS_SLUG_TO_LABEL).filter(l =>
   ENABLED_LENSES.includes(l)
 );
 
-/*
-  Quiz gebruikt echte focal lengths uit de filenames.
-  Dus Red P 58mm blijft 58mm.
-*/
 const UI_FOCALS = [
   "20mm",
   "28mm",
+  "29mm",
   "30mm",
   "35mm",
   "37mm",
@@ -148,14 +145,6 @@ function cleanFocalLabel(focal) {
 }
 
 function uiFocalFromFileFocal(slug, fileFocal) {
-  /*
-    Belangrijk:
-    De quiz gebruikt echte focal lengths uit de bestandsnaam.
-    Dus:
-    - ironglass_red_p_58mm... = 58mm
-    - ironglass_red_p_37mm... = 37mm
-    - ironglass_sovjet_mkii_135mm... = 135mm
-  */
   return cleanFocalLabel(fileFocal);
 }
 
@@ -181,7 +170,7 @@ function tstopSort(a, b) {
 }
 
 /*
-  Parse filenames zoals:
+  Parses filenames like:
   ironglass_red_p_37mm_t2_9_bokeh.jpg
   ironglass_red_p_37mm_t2_9_bokeh_c.jpg
   ironglass_zeiss_jena_50mm_t2_8_noflare_c.jpg
@@ -225,7 +214,7 @@ function parseQuizImage(file) {
 }
 
 /*
-  Als er zowel normale als _c versie is, kies liever _c.
+  If both normal and _c versions exist, prefer _c.
 */
 function preferCorrectedVersions(items) {
   const map = new Map();
@@ -255,7 +244,7 @@ function preferCorrectedVersions(items) {
    ============================ */
 
 async function loadImagePoolFromGitHub() {
-  startButton.textContent = "Bestanden ophalen...";
+  startButton.textContent = "Loading files...";
 
   const res = await fetch(GITHUB_API_IMAGES, {
     cache: "no-store"
@@ -273,8 +262,8 @@ async function loadImagePoolFromGitHub() {
 
   const cleaned = preferCorrectedVersions(parsed);
 
-  console.log("Alle parsed quiz images:", parsed.length);
-  console.log("Na _c voorkeur:", cleaned.length);
+  console.log("Parsed quiz images:", parsed.length);
+  console.log("After _c preference:", cleaned.length);
   console.log(cleaned);
 
   return cleaned;
@@ -284,7 +273,7 @@ async function buildQuizQuestions() {
   imagePool = await loadImagePoolFromGitHub();
 
   if (!imagePool.length) {
-    console.warn("Geen quiz images gevonden. Check filenames/regex.");
+    console.warn("No quiz images found. Check filenames/regex.");
     return [];
   }
 
@@ -430,17 +419,17 @@ function applyDifficultyUI() {
 
 function validateGuessBeforeCheck() {
   if (!lensSelect.value) {
-    alert("Kies eerst een lens.");
+    alert("Please choose a lens first.");
     return false;
   }
 
   if (difficulty !== "easy" && !focalSelect.value) {
-    alert("Kies eerst een focal length.");
+    alert("Please choose a focal length first.");
     return false;
   }
 
   if (difficulty === "hard" && !tstopSelect.value) {
-    alert("Kies eerst een T-stop.");
+    alert("Please choose a T-stop first.");
     return false;
   }
 
@@ -461,20 +450,20 @@ async function startQuiz() {
   maxScore = QUIZ_LENGTH * pointsPerQuestion();
 
   startButton.disabled = true;
-  startButton.textContent = "Quiz laden...";
+  startButton.textContent = "Loading quiz...";
 
   try {
     questions = await buildQuizQuestions();
   } catch (err) {
     console.error(err);
-    alert("Quiz kon de GitHub images niet ophalen. Check console.");
+    alert("The quiz could not load the GitHub images. Check the console.");
     startButton.disabled = false;
     startButton.textContent = "Start quiz";
     return;
   }
 
   if (questions.length < QUIZ_LENGTH) {
-    alert(`Niet genoeg beelden gevonden. Gevonden: ${questions.length}`);
+    alert(`Not enough images found. Found: ${questions.length}`);
     startButton.disabled = false;
     startButton.textContent = "Start quiz";
     return;
@@ -499,7 +488,7 @@ function showQuestion() {
 
   const q = questions[currentIndex];
 
-  roundTitle.textContent = `Ronde ${currentIndex + 1} / ${QUIZ_LENGTH}`;
+  roundTitle.textContent = `Round ${currentIndex + 1} / ${QUIZ_LENGTH}`;
 
   feedbackBox.classList.add("hidden");
   feedbackBox.innerHTML = "";
@@ -507,7 +496,7 @@ function showQuestion() {
   checkButton.classList.remove("hidden");
   nextButton.classList.add("hidden");
 
-  imageLoader.textContent = "Foto laden...";
+  imageLoader.textContent = "Loading image...";
   imageLoader.classList.remove("hidden");
 
   quizImage.style.opacity = "0";
@@ -519,8 +508,8 @@ function showQuestion() {
   };
 
   quizImage.onerror = () => {
-    console.error("Image kon niet laden:", q.url, q);
-    imageLoader.textContent = "Foto kon niet laden. Klik volgende.";
+    console.error("Image could not load:", q.url, q);
+    imageLoader.textContent = "Image could not load. Click next.";
     checkButton.classList.add("hidden");
     nextButton.classList.remove("hidden");
   };
@@ -611,7 +600,7 @@ function renderFeedback(data) {
       <div class="feedback-line">
         <strong>Focal</strong>
         <span class="${focalGood ? "good" : "bad"}">
-          ${focalGood ? "Goed" : `Fout — jij koos ${guessedFocal}`}
+          ${focalGood ? "Correct" : `Wrong — you chose ${guessedFocal}`}
         </span>
       </div>
     `
@@ -622,7 +611,7 @@ function renderFeedback(data) {
       <div class="feedback-line">
         <strong>T-stop</strong>
         <span class="${tstopGood ? "good" : "bad"}">
-          ${tstopGood ? "Goed" : `Fout — jij koos T${guessedTStop}`}
+          ${tstopGood ? "Correct" : `Wrong — you chose T${guessedTStop}`}
         </span>
       </div>
     `
@@ -633,12 +622,12 @@ function renderFeedback(data) {
     : "";
 
   feedbackBox.innerHTML = `
-    <h3>${roundScore} / ${possible} punten</h3>
+    <h3>${roundScore} / ${possible} points</h3>
 
     <div class="feedback-line">
       <strong>Lens</strong>
       <span class="${lensGood ? "good" : "bad"}">
-        ${lensGood ? "Goed" : `Fout — jij koos ${guessedLens}`}
+        ${lensGood ? "Correct" : `Wrong — you chose ${guessedLens}`}
       </span>
     </div>
 
@@ -646,7 +635,7 @@ function renderFeedback(data) {
     ${tstopLine}
 
     <div class="correct-answer">
-      <strong>Correct antwoord:</strong><br>
+      <strong>Correct answer:</strong><br>
       ${q.lens} — ${q.uiFocal} — T${q.tStop}
       ${sceneText}
       <br><br>
@@ -674,8 +663,8 @@ function showResults() {
 
   const pct = Math.round((score / maxScore) * 100);
 
-  resultTitle.textContent = `${score} / ${maxScore} punten`;
-  resultText.textContent = `Je had ${pct}% goed in ${difficulty.toUpperCase()} mode.`;
+  resultTitle.textContent = `${score} / ${maxScore} points`;
+  resultText.textContent = `You scored ${pct}% in ${difficulty.toUpperCase()} mode.`;
 
   const lensHits = history.filter(h => h.lensGood).length;
   const focalHits = history.filter(h => h.focalGood).length;
@@ -683,7 +672,7 @@ function showResults() {
 
   let rows = `
     <div class="breakdown-row">
-      <span>Lens goed</span>
+      <span>Lens correct</span>
       <strong>${lensHits} / ${QUIZ_LENGTH}</strong>
     </div>
   `;
@@ -691,7 +680,7 @@ function showResults() {
   if (difficulty !== "easy") {
     rows += `
       <div class="breakdown-row">
-        <span>Focal length goed</span>
+        <span>Focal length correct</span>
         <strong>${focalHits} / ${QUIZ_LENGTH}</strong>
       </div>
     `;
@@ -700,7 +689,7 @@ function showResults() {
   if (difficulty === "hard") {
     rows += `
       <div class="breakdown-row">
-        <span>T-stop goed</span>
+        <span>T-stop correct</span>
         <strong>${tstopHits} / ${QUIZ_LENGTH}</strong>
       </div>
     `;
