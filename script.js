@@ -239,20 +239,23 @@ function lensFocalKey(item) {
   return `${item.lens}_${item.uiFocal}`;
 }
 
-function safeJSONParse(value, fallback) {
+function safeJSONArray(value) {
+  if (!value) return [];
+
   try {
-    return JSON.parse(value);
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    return fallback;
+    return [];
   }
 }
 
 function getRecentImages() {
-  return safeJSONParse(localStorage.getItem(STORAGE_KEY_IMAGES), []);
+  return safeJSONArray(localStorage.getItem(STORAGE_KEY_IMAGES));
 }
 
 function getRecentCombos() {
-  return safeJSONParse(localStorage.getItem(STORAGE_KEY_COMBOS), []);
+  return safeJSONArray(localStorage.getItem(STORAGE_KEY_COMBOS));
 }
 
 function saveRecentUsage(picked) {
