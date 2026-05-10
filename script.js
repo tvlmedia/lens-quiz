@@ -8,14 +8,14 @@
    - Mistake notes required in first round
    - Lightbox for result images
    - PDF export for mistakes
-   - Uses GitHub TREE API instead of contents API
+   - Uses jsDelivr file API instead of GitHub API
    ============================ */
 
-const GITHUB_API_IMAGES =
-  "https://api.github.com/repos/tvlmedia/IronGlass/git/trees/main?recursive=1";
+const JSDELIVR_FILE_API =
+  "https://data.jsdelivr.com/v1/package/gh/tvlmedia/IronGlass@main/flat";
 
 const RAW_IMAGE_BASE =
-  "https://raw.githubusercontent.com/tvlmedia/IronGlass/main/images/";
+  "https://cdn.jsdelivr.net/gh/tvlmedia/IronGlass@main/images/";
 
 const QUIZ_LENGTH = 10;
 const REVIEW_ROUND_ENABLED = true;
@@ -274,7 +274,7 @@ function saveRecentUsage(picked) {
 }
 
 /* ============================
-   Parse GitHub filenames
+   Parse filenames
    ============================ */
 
 function parseQuizImage(file) {
@@ -606,35 +606,34 @@ async function exportMistakesPdf() {
 }
 
 /* ============================
-   GitHub image loading
+   Image list loading via jsDelivr
    ============================ */
 
 async function loadImagePoolFromGitHub() {
   startButton.textContent = "Loading files...";
 
-  const res = await fetch(GITHUB_API_IMAGES, {
+  const res = await fetch(JSDELIVR_FILE_API, {
     cache: "no-store"
   });
 
   if (!res.ok) {
-    throw new Error(`GitHub API error: ${res.status}`);
+    throw new Error(`jsDelivr file API error: ${res.status}`);
   }
 
   const data = await res.json();
 
-  if (!data.tree || !Array.isArray(data.tree)) {
-    throw new Error("GitHub tree API returned unexpected data.");
+  if (!data.files || !Array.isArray(data.files)) {
+    throw new Error("jsDelivr returned unexpected data.");
   }
 
-  const files = data.tree
+  const files = data.files
     .filter(item =>
-      item.type === "blob" &&
-      item.path &&
-      item.path.startsWith("images/") &&
-      item.path.toLowerCase().endsWith(".jpg")
+      item.name &&
+      item.name.startsWith("/images/") &&
+      item.name.toLowerCase().endsWith(".jpg")
     )
     .map(item => {
-      const name = item.path.split("/").pop();
+      const name = item.name.split("/").pop();
 
       return {
         name,
@@ -648,13 +647,13 @@ async function loadImagePoolFromGitHub() {
 
   const cleaned = preferCorrectedVersions(parsed);
 
-  console.log("Files from GitHub tree:", files.length);
+  console.log("Files from jsDelivr:", files.length);
   console.log("Parsed quiz images:", parsed.length);
   console.log("After _c preference:", cleaned.length);
   console.log("First parsed image:", cleaned[0]);
 
   if (!cleaned.length) {
-    throw new Error("No valid quiz images parsed from GitHub tree.");
+    throw new Error("No valid quiz images parsed. Check filename format.");
   }
 
   return cleaned;
@@ -965,7 +964,7 @@ async function startQuiz() {
     questions = await buildQuizQuestions();
   } catch (err) {
     console.error(err);
-    alert("The quiz could not load the GitHub images. Check the console.");
+    alert(`The quiz could not load the image list.\n\n${err.message}`);
     startButton.disabled = false;
     startButton.textContent = "Start quiz";
     return;
