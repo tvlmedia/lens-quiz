@@ -8,10 +8,14 @@
    - Mistake notes required in first round
    - Lightbox for result images
    - PDF export for mistakes
+   - Uses GitHub TREE API instead of contents API
    ============================ */
 
 const GITHUB_API_IMAGES =
-  "https://api.github.com/repos/tvlmedia/IronGlass/contents/images?ref=main";
+  "https://api.github.com/repos/tvlmedia/IronGlass/git/trees/main?recursive=1";
+
+const RAW_IMAGE_BASE =
+  "https://raw.githubusercontent.com/tvlmedia/IronGlass/main/images/";
 
 const QUIZ_LENGTH = 10;
 const REVIEW_ROUND_ENABLED = true;
@@ -616,7 +620,27 @@ async function loadImagePoolFromGitHub() {
     throw new Error(`GitHub API error: ${res.status}`);
   }
 
-  const files = await res.json();
+  const data = await res.json();
+
+  if (!data.tree || !Array.isArray(data.tree)) {
+    throw new Error("GitHub tree API returned unexpected data.");
+  }
+
+  const files = data.tree
+    .filter(item =>
+      item.type === "blob" &&
+      item.path &&
+      item.path.startsWith("images/") &&
+      item.path.toLowerCase().endsWith(".jpg")
+    )
+    .map(item => {
+      const name = item.path.split("/").pop();
+
+      return {
+        name,
+        download_url: RAW_IMAGE_BASE + encodeURIComponent(name)
+      };
+    });
 
   const parsed = files
     .map(parseQuizImage)
@@ -624,8 +648,14 @@ async function loadImagePoolFromGitHub() {
 
   const cleaned = preferCorrectedVersions(parsed);
 
+  console.log("Files from GitHub tree:", files.length);
   console.log("Parsed quiz images:", parsed.length);
   console.log("After _c preference:", cleaned.length);
+  console.log("First parsed image:", cleaned[0]);
+
+  if (!cleaned.length) {
+    throw new Error("No valid quiz images parsed from GitHub tree.");
+  }
 
   return cleaned;
 }
@@ -1231,7 +1261,7 @@ function maybeStartReviewRound() {
     return;
   }
 
-  reviewQuestions = mistakes.map((item, index) => ({
+  reviewQuestions = mistakes.map(item => ({
     originalHistoryIndex: history.indexOf(item),
     historyEntry: item,
     question: item.question
