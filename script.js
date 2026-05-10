@@ -1,8 +1,9 @@
 /* ============================
    TVL / IronGlass Lens Quiz
-   - Uses local images.json manifest
+   - Uses GitHub images folder directly
+   - Parses lens/focal/T-stop from filenames
    - 10 first-round questions
-   - Stronger randomization
+   - Strong randomization
    - Anti-repeat memory across games
    - Duolingo-style review round after mistakes
    - Review round does NOT affect score
@@ -11,17 +12,18 @@
    - PDF export for mistakes
    ============================ */
 
-const IMAGE_MANIFEST_URL = "images.json";
+const GITHUB_IMAGES_API =
+  "https://api.github.com/repos/tvlmedia/IronGlass/contents/images?ref=main";
 
 const RAW_IMAGE_BASE =
-  "https://cdn.jsdelivr.net/gh/tvlmedia/IronGlass@main/images/";
+  "https://raw.githubusercontent.com/tvlmedia/IronGlass/main/images/";
 
 const QUIZ_LENGTH = 10;
 const REVIEW_ROUND_ENABLED = true;
 const RECENT_MEMORY_LIMIT = 80;
 
-const STORAGE_KEY_IMAGES = "tvl_lens_quiz_recent_images_v4";
-const STORAGE_KEY_COMBOS = "tvl_lens_quiz_recent_combos_v4";
+const STORAGE_KEY_IMAGES = "tvl_lens_quiz_recent_images_v5";
+const STORAGE_KEY_COMBOS = "tvl_lens_quiz_recent_combos_v5";
 
 const ENABLED_LENSES = [
   "IronGlass Red P",
@@ -277,7 +279,7 @@ function saveRecentUsage(picked) {
 
 function parseQuizImage(file) {
   const name = file.name || "";
-  const url = file.download_url || "";
+  const url = file.download_url || (RAW_IMAGE_BASE + encodeURIComponent(name));
 
   if (!name.toLowerCase().endsWith(".jpg")) return null;
   if (!name.startsWith("ironglass_")) return null;
@@ -604,44 +606,42 @@ async function exportMistakesPdf() {
 }
 
 /* ============================
-   Image list loading from images.json
+   Image list loading from GitHub folder
    ============================ */
 
-async function loadImagePoolFromManifest() {
-  startButton.textContent = "Loading files...";
+async function loadImagePoolFromGithubFolder() {
+  startButton.textContent = "Loading image folder...";
 
-  let names = [];
-
-  try {
-    const res = await fetch(`${IMAGE_MANIFEST_URL}?v=${Date.now()}`, {
-      cache: "no-store"
-    });
-
-    if (!res.ok) {
-      throw new Error(`images.json could not load: ${res.status}`);
+  const res = await fetch(GITHUB_IMAGES_API, {
+    cache: "no-store",
+    headers: {
+      "Accept": "application/vnd.github+json"
     }
+  });
 
-    names = await res.json();
-
-    if (!Array.isArray(names)) {
-      throw new Error("images.json must be an array of filenames.");
-    }
-  } catch (err) {
-    console.warn("images.json failed:", err);
+  if (!res.ok) {
     throw new Error(
-      "images.json is missing or invalid. Create images.json next to index.html, script.js and style.css."
+      `GitHub images folder could not load: ${res.status}. This can happen if GitHub rate-limits you after many refreshes.`
     );
   }
 
-  const files = names
-    .filter(name =>
-      typeof name === "string" &&
-      name.toLowerCase().endsWith(".jpg") &&
-      name.startsWith("ironglass_")
+  const filesFromGithub = await res.json();
+
+  if (!Array.isArray(filesFromGithub)) {
+    throw new Error("GitHub returned unexpected data. Expected an array of files.");
+  }
+
+  const files = filesFromGithub
+    .filter(file =>
+      file &&
+      file.type === "file" &&
+      typeof file.name === "string" &&
+      file.name.toLowerCase().endsWith(".jpg") &&
+      file.name.startsWith("ironglass_")
     )
-    .map(name => ({
-      name,
-      download_url: RAW_IMAGE_BASE + encodeURIComponent(name)
+    .map(file => ({
+      name: file.name,
+      download_url: file.download_url || (RAW_IMAGE_BASE + encodeURIComponent(file.name))
     }));
 
   const parsed = files
@@ -650,13 +650,13 @@ async function loadImagePoolFromManifest() {
 
   const cleaned = preferCorrectedVersions(parsed);
 
-  console.log("Files from images.json:", files.length);
+  console.log("Files from GitHub images folder:", files.length);
   console.log("Parsed quiz images:", parsed.length);
   console.log("After _c preference:", cleaned.length);
   console.log("First parsed image:", cleaned[0]);
 
   if (!cleaned.length) {
-    throw new Error("No valid quiz images parsed. Check images.json filename format.");
+    throw new Error("No valid quiz images parsed. Check filename format.");
   }
 
   return cleaned;
@@ -667,7 +667,7 @@ async function loadImagePoolFromManifest() {
    ============================ */
 
 async function buildQuizQuestions() {
-  imagePool = await loadImagePoolFromManifest();
+  imagePool = await loadImagePoolFromGithubFolder();
 
   if (!imagePool.length) {
     console.warn("No quiz images found. Check filenames/regex.");
@@ -967,14 +967,14 @@ async function startQuiz() {
     questions = await buildQuizQuestions();
   } catch (err) {
     console.error(err);
-    alert(`The quiz could not load the image list.\n\n${err.message}`);
+    alert(`The quiz could not load the GitHub images folder.\n\n${err.message}`);
     startButton.disabled = false;
     startButton.textContent = "Start quiz";
     return;
   }
 
   if (questions.length < QUIZ_LENGTH) {
-    alert(`Not enough images found. Found: ${questions.length}. Check if your images.json contains enough valid image filenames.`);
+    alert(`Not enough images found. Found: ${questions.length}. Check if your GitHub image filenames are valid.`);
     startButton.disabled = false;
     startButton.textContent = "Start quiz";
     return;
