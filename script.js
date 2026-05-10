@@ -1,14 +1,14 @@
 /* ============================
    TVL / IronGlass Lens Quiz
+   - Uses local images.json manifest
    - 10 first-round questions
-   - Better randomization
+   - Stronger randomization
    - Anti-repeat memory across games
    - Duolingo-style review round after mistakes
    - Review round does NOT affect score
    - Mistake notes required in first round
    - Lightbox for result images
    - PDF export for mistakes
-   - Uses local images.json manifest
    ============================ */
 
 const IMAGE_MANIFEST_URL = "images.json";
@@ -19,10 +19,9 @@ const RAW_IMAGE_BASE =
 const QUIZ_LENGTH = 10;
 const REVIEW_ROUND_ENABLED = true;
 const RECENT_MEMORY_LIMIT = 80;
-const BALANCE_LENSES = true;
 
-const STORAGE_KEY_IMAGES = "tvl_lens_quiz_recent_images_v3";
-const STORAGE_KEY_COMBOS = "tvl_lens_quiz_recent_combos_v3";
+const STORAGE_KEY_IMAGES = "tvl_lens_quiz_recent_images_v4";
+const STORAGE_KEY_COMBOS = "tvl_lens_quiz_recent_combos_v4";
 
 const ENABLED_LENSES = [
   "IronGlass Red P",
@@ -162,13 +161,13 @@ function pickRandom(arr) {
   return arr[randomInt(arr.length)];
 }
 
-/* ============================
-   General helpers
-   ============================ */
-
 function unique(arr) {
   return [...new Set(arr)];
 }
+
+/* ============================
+   General helpers
+   ============================ */
 
 function getDifficulty() {
   return document.querySelector("input[name='difficulty']:checked")?.value || "easy";
@@ -611,18 +610,27 @@ async function exportMistakesPdf() {
 async function loadImagePoolFromManifest() {
   startButton.textContent = "Loading files...";
 
-  const res = await fetch(`${IMAGE_MANIFEST_URL}?v=${Date.now()}`, {
-    cache: "no-store"
-  });
+  let names = [];
 
-  if (!res.ok) {
-    throw new Error(`images.json could not load: ${res.status}`);
-  }
+  try {
+    const res = await fetch(`${IMAGE_MANIFEST_URL}?v=${Date.now()}`, {
+      cache: "no-store"
+    });
 
-  const names = await res.json();
+    if (!res.ok) {
+      throw new Error(`images.json could not load: ${res.status}`);
+    }
 
-  if (!Array.isArray(names)) {
-    throw new Error("images.json must be an array of filenames.");
+    names = await res.json();
+
+    if (!Array.isArray(names)) {
+      throw new Error("images.json must be an array of filenames.");
+    }
+  } catch (err) {
+    console.warn("images.json failed:", err);
+    throw new Error(
+      "images.json is missing or invalid. Create images.json next to index.html, script.js and style.css."
+    );
   }
 
   const files = names
