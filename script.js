@@ -3,7 +3,9 @@
    - Loads real image files from GitHub
    - 10 rounds
    - Spreads lenses as evenly as possible
+   - Better randomness using crypto when available
    - No exact same image twice in one game
+   - Avoids repeated lens/focal/T-stop/scene combos in one game
    - Dropdowns start with placeholders
    - Lens -> only existing focals
    - Lens + focal -> only existing T-stops
@@ -121,16 +123,39 @@ let history = [];
 let locked = false;
 
 /* ============================
-   Helpers
+   Random helpers
    ============================ */
 
+function randomInt(max) {
+  if (max <= 0) return 0;
+
+  if (window.crypto && window.crypto.getRandomValues) {
+    const array = new Uint32Array(1);
+    window.crypto.getRandomValues(array);
+    return array[0] % max;
+  }
+
+  return Math.floor(Math.random() * max);
+}
+
 function shuffle(arr) {
-  return [...arr].sort(() => Math.random() - 0.5);
+  const out = [...arr];
+
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+
+  return out;
 }
 
 function pickRandom(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
+  return arr[randomInt(arr.length)];
 }
+
+/* ============================
+   General helpers
+   ============================ */
 
 function unique(arr) {
   return [...new Set(arr)];
@@ -195,6 +220,14 @@ function focalSort(a, b) {
 function tstopSort(a, b) {
   return parseFloat(a) - parseFloat(b);
 }
+
+function comboKey(item) {
+  return `${item.lens}_${item.uiFocal}_${item.tStop}_${item.scene}`;
+}
+
+/* ============================
+   Parse GitHub filenames
+   ============================ */
 
 function parseQuizImage(file) {
   const name = file.name || "";
@@ -535,6 +568,10 @@ async function loadImagePoolFromGitHub() {
   return cleaned;
 }
 
+/* ============================
+   Build quiz questions
+   ============================ */
+
 async function buildQuizQuestions() {
   imagePool = await loadImagePoolFromGitHub();
 
@@ -553,12 +590,13 @@ async function buildQuizQuestions() {
     byLens.get(item.lens).push(item);
   }
 
-  const availableLensNames = ENABLED_LENSES.filter(lens =>
+  let availableLensNames = ENABLED_LENSES.filter(lens =>
     byLens.has(lens) && byLens.get(lens).length
   );
 
   const picked = [];
   const usedImageNames = new Set();
+  const usedCombos = new Set();
 
   let lensCycle = shuffle(availableLensNames);
 
@@ -568,20 +606,36 @@ async function buildQuizQuestions() {
     }
 
     const lens = lensCycle.shift();
-    const options = byLens.get(lens).filter(item => !usedImageNames.has(item.name));
+    const lensItems = byLens.get(lens) || [];
+
+    let options = lensItems.filter(item => {
+      return !usedImageNames.has(item.name) && !usedCombos.has(comboKey(item));
+    });
 
     if (!options.length) {
-      const index = availableLensNames.indexOf(lens);
-      if (index !== -1) availableLensNames.splice(index, 1);
+      options = lensItems.filter(item => !usedImageNames.has(item.name));
+    }
+
+    if (!options.length) {
+      availableLensNames = availableLensNames.filter(l => l !== lens);
+      lensCycle = lensCycle.filter(l => l !== lens);
       continue;
     }
 
     const choice = pickRandom(options);
+
     usedImageNames.add(choice.name);
+    usedCombos.add(comboKey(choice));
     picked.push(choice);
   }
 
-  console.log("Picked questions:", picked);
+  console.log("Picked questions:", picked.map(q => ({
+    lens: q.lens,
+    focal: q.uiFocal,
+    tStop: q.tStop,
+    scene: q.scene,
+    file: q.name
+  })));
 
   return picked;
 }
