@@ -8,11 +8,10 @@
    - Mistake notes required in first round
    - Lightbox for result images
    - PDF export for mistakes
-   - Uses jsDelivr file API instead of GitHub API
+   - Uses local images.json manifest
    ============================ */
 
-const JSDELIVR_FILE_API =
-  "https://data.jsdelivr.com/v1/package/gh/tvlmedia/IronGlass@main/flat";
+const IMAGE_MANIFEST_URL = "images.json";
 
 const RAW_IMAGE_BASE =
   "https://cdn.jsdelivr.net/gh/tvlmedia/IronGlass@main/images/";
@@ -22,8 +21,8 @@ const REVIEW_ROUND_ENABLED = true;
 const RECENT_MEMORY_LIMIT = 80;
 const BALANCE_LENSES = true;
 
-const STORAGE_KEY_IMAGES = "tvl_lens_quiz_recent_images_v2";
-const STORAGE_KEY_COMBOS = "tvl_lens_quiz_recent_combos_v2";
+const STORAGE_KEY_IMAGES = "tvl_lens_quiz_recent_images_v3";
+const STORAGE_KEY_COMBOS = "tvl_lens_quiz_recent_combos_v3";
 
 const ENABLED_LENSES = [
   "IronGlass Red P",
@@ -606,40 +605,36 @@ async function exportMistakesPdf() {
 }
 
 /* ============================
-   Image list loading via jsDelivr
+   Image list loading from images.json
    ============================ */
 
-async function loadImagePoolFromGitHub() {
+async function loadImagePoolFromManifest() {
   startButton.textContent = "Loading files...";
 
-  const res = await fetch(JSDELIVR_FILE_API, {
+  const res = await fetch(`${IMAGE_MANIFEST_URL}?v=${Date.now()}`, {
     cache: "no-store"
   });
 
   if (!res.ok) {
-    throw new Error(`jsDelivr file API error: ${res.status}`);
+    throw new Error(`images.json could not load: ${res.status}`);
   }
 
-  const data = await res.json();
+  const names = await res.json();
 
-  if (!data.files || !Array.isArray(data.files)) {
-    throw new Error("jsDelivr returned unexpected data.");
+  if (!Array.isArray(names)) {
+    throw new Error("images.json must be an array of filenames.");
   }
 
-  const files = data.files
-    .filter(item =>
-      item.name &&
-      item.name.startsWith("/images/") &&
-      item.name.toLowerCase().endsWith(".jpg")
+  const files = names
+    .filter(name =>
+      typeof name === "string" &&
+      name.toLowerCase().endsWith(".jpg") &&
+      name.startsWith("ironglass_")
     )
-    .map(item => {
-      const name = item.name.split("/").pop();
-
-      return {
-        name,
-        download_url: RAW_IMAGE_BASE + encodeURIComponent(name)
-      };
-    });
+    .map(name => ({
+      name,
+      download_url: RAW_IMAGE_BASE + encodeURIComponent(name)
+    }));
 
   const parsed = files
     .map(parseQuizImage)
@@ -647,13 +642,13 @@ async function loadImagePoolFromGitHub() {
 
   const cleaned = preferCorrectedVersions(parsed);
 
-  console.log("Files from jsDelivr:", files.length);
+  console.log("Files from images.json:", files.length);
   console.log("Parsed quiz images:", parsed.length);
   console.log("After _c preference:", cleaned.length);
   console.log("First parsed image:", cleaned[0]);
 
   if (!cleaned.length) {
-    throw new Error("No valid quiz images parsed. Check filename format.");
+    throw new Error("No valid quiz images parsed. Check images.json filename format.");
   }
 
   return cleaned;
@@ -664,7 +659,7 @@ async function loadImagePoolFromGitHub() {
    ============================ */
 
 async function buildQuizQuestions() {
-  imagePool = await loadImagePoolFromGitHub();
+  imagePool = await loadImagePoolFromManifest();
 
   if (!imagePool.length) {
     console.warn("No quiz images found. Check filenames/regex.");
@@ -697,7 +692,7 @@ async function buildQuizQuestions() {
 
   while (picked.length < QUIZ_LENGTH && availableLensNames.length) {
     if (!lensCycle.length) {
-      lensCycle = BALANCE_LENSES ? shuffle(availableLensNames) : shuffle(availableLensNames);
+      lensCycle = shuffle(availableLensNames);
     }
 
     const lens = lensCycle.shift();
@@ -971,7 +966,7 @@ async function startQuiz() {
   }
 
   if (questions.length < QUIZ_LENGTH) {
-    alert(`Not enough images found. Found: ${questions.length}. Check if your image filenames match the parser.`);
+    alert(`Not enough images found. Found: ${questions.length}. Check if your images.json contains enough valid image filenames.`);
     startButton.disabled = false;
     startButton.textContent = "Start quiz";
     return;
