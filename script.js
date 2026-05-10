@@ -1,25 +1,25 @@
 /* ============================
    TVL / IronGlass Lens Quiz
-   - Loads real image files from GitHub
-   - 10 rounds
-   - Spreads lenses as evenly as possible
-   - Better randomness using crypto when available
-   - No exact same image twice in one game
-   - Avoids repeated lens/focal/T-stop/scene combos in one game
-   - Dropdowns start with placeholders
-   - Lens -> only existing focals
-   - Lens + focal -> only existing T-stops
-   - Uses REAL focal lengths from filenames
-   - If a user gets something wrong, they must write a memory note
-   - End screen shows all mistakes + notes + images
-   - Click result image = lightbox
-   - Export mistakes PDF
+   - 10 first-round questions
+   - Better randomization
+   - Anti-repeat memory across games
+   - Duolingo-style review round after mistakes
+   - Review round does NOT affect score
+   - Mistake notes required in first round
+   - Lightbox for result images
+   - PDF export for mistakes
    ============================ */
 
 const GITHUB_API_IMAGES =
   "https://api.github.com/repos/tvlmedia/IronGlass/contents/images?ref=main";
 
 const QUIZ_LENGTH = 10;
+const REVIEW_ROUND_ENABLED = true;
+const RECENT_MEMORY_LIMIT = 80;
+const BALANCE_LENSES = true;
+
+const STORAGE_KEY_IMAGES = "tvl_lens_quiz_recent_images_v2";
+const STORAGE_KEY_COMBOS = "tvl_lens_quiz_recent_combos_v2";
 
 const ENABLED_LENSES = [
   "IronGlass Red P",
@@ -88,6 +88,7 @@ const resultScreen = document.getElementById("resultScreen");
 const startButton = document.getElementById("startButton");
 const restartButton = document.getElementById("restartButton");
 
+const quizEyebrow = document.getElementById("quizEyebrow");
 const roundTitle = document.getElementById("roundTitle");
 const liveScore = document.getElementById("liveScore");
 
@@ -121,6 +122,11 @@ let score = 0;
 let maxScore = 10;
 let history = [];
 let locked = false;
+
+let reviewMode = false;
+let reviewQuestions = [];
+let reviewIndex = 0;
+let reviewHistory = [];
 
 /* ============================
    Random helpers
@@ -223,6 +229,44 @@ function tstopSort(a, b) {
 
 function comboKey(item) {
   return `${item.lens}_${item.uiFocal}_${item.tStop}_${item.scene}`;
+}
+
+function lensFocalKey(item) {
+  return `${item.lens}_${item.uiFocal}`;
+}
+
+function safeJSONParse(value, fallback) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function getRecentImages() {
+  return safeJSONParse(localStorage.getItem(STORAGE_KEY_IMAGES), []);
+}
+
+function getRecentCombos() {
+  return safeJSONParse(localStorage.getItem(STORAGE_KEY_COMBOS), []);
+}
+
+function saveRecentUsage(picked) {
+  const recentImages = getRecentImages();
+  const recentCombos = getRecentCombos();
+
+  const newImages = picked.map(q => q.name);
+  const newCombos = picked.map(q => comboKey(q));
+
+  localStorage.setItem(
+    STORAGE_KEY_IMAGES,
+    JSON.stringify(unique([...newImages, ...recentImages]).slice(0, RECENT_MEMORY_LIMIT))
+  );
+
+  localStorage.setItem(
+    STORAGE_KEY_COMBOS,
+    JSON.stringify(unique([...newCombos, ...recentCombos]).slice(0, RECENT_MEMORY_LIMIT))
+  );
 }
 
 /* ============================
@@ -410,9 +454,11 @@ async function exportMistakesPdf() {
     }
   }
 
+  const reviewCorrect = reviewHistory.filter(r => r.correct).length;
+
   drawHeader(
     "Mistakes & Memory Notes",
-    `Score: ${score} / ${maxScore} points - ${difficulty.toUpperCase()} mode`
+    `Score: ${score} / ${maxScore} points - ${difficulty.toUpperCase()} mode - Review: ${reviewCorrect} / ${mistakes.length}`
   );
 
   pdf.setTextColor(220, 220, 220);
@@ -457,6 +503,7 @@ async function exportMistakesPdf() {
   for (let i = 0; i < mistakes.length; i++) {
     const item = mistakes[i];
     const q = item.question;
+    const review = reviewHistory.find(r => r.originalHistoryIndex === history.indexOf(item));
 
     pdf.addPage();
     drawHeader(
@@ -510,12 +557,28 @@ async function exportMistakesPdf() {
 
     pdf.setFont("helvetica", "bold");
     pdf.setTextColor(255, 255, 255);
-    pdf.text("Your guess:", textX, textY);
+    pdf.text("Your first guess:", textX, textY);
     textY += 18;
 
     pdf.setFont("helvetica", "normal");
     pdf.setTextColor(180, 180, 180);
     pdf.text(guessedParts.join(" - "), textX, textY);
+    textY += 34;
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("Review round:", textX, textY);
+    textY += 18;
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(180, 180, 180);
+    pdf.text(
+      review
+        ? `${review.correct ? "Correct" : "Wrong"} - chose ${review.guessedLens}`
+        : "Not reviewed",
+      textX,
+      textY
+    );
     textY += 34;
 
     pdf.setFont("helvetica", "bold");
@@ -563,7 +626,6 @@ async function loadImagePoolFromGitHub() {
 
   console.log("Parsed quiz images:", parsed.length);
   console.log("After _c preference:", cleaned.length);
-  console.log(cleaned);
 
   return cleaned;
 }
@@ -579,6 +641,9 @@ async function buildQuizQuestions() {
     console.warn("No quiz images found. Check filenames/regex.");
     return [];
   }
+
+  const recentImages = new Set(getRecentImages());
+  const recentCombos = new Set(getRecentCombos());
 
   const byLens = new Map();
 
@@ -597,20 +662,40 @@ async function buildQuizQuestions() {
   const picked = [];
   const usedImageNames = new Set();
   const usedCombos = new Set();
+  const usedLensFocals = new Set();
 
   let lensCycle = shuffle(availableLensNames);
 
   while (picked.length < QUIZ_LENGTH && availableLensNames.length) {
     if (!lensCycle.length) {
-      lensCycle = shuffle(availableLensNames);
+      lensCycle = BALANCE_LENSES ? shuffle(availableLensNames) : shuffle(availableLensNames);
     }
 
     const lens = lensCycle.shift();
     const lensItems = byLens.get(lens) || [];
 
-    let options = lensItems.filter(item => {
-      return !usedImageNames.has(item.name) && !usedCombos.has(comboKey(item));
-    });
+    let options = lensItems.filter(item =>
+      !usedImageNames.has(item.name) &&
+      !usedCombos.has(comboKey(item)) &&
+      !usedLensFocals.has(lensFocalKey(item)) &&
+      !recentImages.has(item.name) &&
+      !recentCombos.has(comboKey(item))
+    );
+
+    if (!options.length) {
+      options = lensItems.filter(item =>
+        !usedImageNames.has(item.name) &&
+        !usedCombos.has(comboKey(item)) &&
+        !recentImages.has(item.name)
+      );
+    }
+
+    if (!options.length) {
+      options = lensItems.filter(item =>
+        !usedImageNames.has(item.name) &&
+        !usedCombos.has(comboKey(item))
+      );
+    }
 
     if (!options.length) {
       options = lensItems.filter(item => !usedImageNames.has(item.name));
@@ -626,6 +711,7 @@ async function buildQuizQuestions() {
 
     usedImageNames.add(choice.name);
     usedCombos.add(comboKey(choice));
+    usedLensFocals.add(lensFocalKey(choice));
     picked.push(choice);
   }
 
@@ -637,11 +723,13 @@ async function buildQuizQuestions() {
     file: q.name
   })));
 
+  saveRecentUsage(picked);
+
   return picked;
 }
 
 /* ============================
-   Dynamic dropdown logic
+   Dropdown logic
    ============================ */
 
 function fillSelectWithPlaceholder(select, placeholder, values, formatter = v => v) {
@@ -713,7 +801,25 @@ function resetGuessDropdowns() {
   tstopSelect.disabled = true;
 }
 
+function resetReviewDropdown() {
+  const lenses = getAvailableLensesFromPool();
+
+  fillSelectWithPlaceholder(
+    lensSelect,
+    "Guess your lens again",
+    lenses.length ? lenses : LENSES
+  );
+
+  fillSelectWithPlaceholder(focalSelect, "Guess focal length", []);
+  fillSelectWithPlaceholder(tstopSelect, "Guess T-stop", [], value => `T${value}`);
+
+  focalSelect.disabled = true;
+  tstopSelect.disabled = true;
+}
+
 function updateFocalOptionsAfterLensChoice() {
+  if (reviewMode) return;
+
   const lens = lensSelect.value;
 
   fillSelectWithPlaceholder(
@@ -746,6 +852,8 @@ function updateFocalOptionsAfterLensChoice() {
 }
 
 function updateTStopOptionsAfterFocalChoice() {
+  if (reviewMode) return;
+
   const lens = lensSelect.value;
   const focal = focalSelect.value;
 
@@ -773,6 +881,12 @@ function updateTStopOptionsAfterFocalChoice() {
 }
 
 function applyDifficultyUI() {
+  if (reviewMode) {
+    focalField.classList.add("hidden");
+    tstopField.classList.add("hidden");
+    return;
+  }
+
   focalField.classList.toggle("hidden", difficulty === "easy");
   tstopField.classList.toggle("hidden", difficulty !== "hard");
 }
@@ -783,12 +897,12 @@ function validateGuessBeforeCheck() {
     return false;
   }
 
-  if (difficulty !== "easy" && !focalSelect.value) {
+  if (!reviewMode && difficulty !== "easy" && !focalSelect.value) {
     alert("Please choose a focal length first.");
     return false;
   }
 
-  if (difficulty === "hard" && !tstopSelect.value) {
+  if (!reviewMode && difficulty === "hard" && !tstopSelect.value) {
     alert("Please choose a T-stop first.");
     return false;
   }
@@ -797,7 +911,7 @@ function validateGuessBeforeCheck() {
 }
 
 /* ============================
-   Quiz flow
+   Main quiz flow
    ============================ */
 
 async function startQuiz() {
@@ -806,6 +920,11 @@ async function startQuiz() {
   score = 0;
   history = [];
   locked = false;
+
+  reviewMode = false;
+  reviewQuestions = [];
+  reviewIndex = 0;
+  reviewHistory = [];
 
   maxScore = QUIZ_LENGTH * pointsPerQuestion();
 
@@ -829,6 +948,7 @@ async function startQuiz() {
     return;
   }
 
+  quizEyebrow.textContent = "IronGlass Lens Quiz";
   applyDifficultyUI();
 
   liveScore.textContent = String(score);
@@ -845,19 +965,30 @@ async function startQuiz() {
 
 function showQuestion() {
   locked = false;
+  reviewMode = false;
 
   const q = questions[currentIndex];
 
+  quizEyebrow.textContent = "IronGlass Lens Quiz";
   roundTitle.textContent = `Round ${currentIndex + 1} / ${QUIZ_LENGTH}`;
+  liveScore.textContent = String(score);
 
   feedbackBox.classList.add("hidden");
   feedbackBox.innerHTML = "";
 
+  checkButton.textContent = "Check answer";
   checkButton.classList.remove("hidden");
+  nextButton.textContent = "Next image";
   nextButton.classList.add("hidden");
   nextButton.disabled = false;
   nextButton.classList.remove("disabled");
 
+  applyDifficultyUI();
+  loadQuizImage(q);
+  resetGuessDropdowns();
+}
+
+function loadQuizImage(q) {
   imageLoader.textContent = "Loading image...";
   imageLoader.classList.remove("hidden");
 
@@ -879,11 +1010,14 @@ function showQuestion() {
   };
 
   quizImage.src = q.url;
-
-  resetGuessDropdowns();
 }
 
 function checkAnswer() {
+  if (reviewMode) {
+    checkReviewAnswer();
+    return;
+  }
+
   if (locked) return;
   if (!validateGuessBeforeCheck()) return;
 
@@ -1070,30 +1204,160 @@ function renderFeedback(data) {
 function nextQuestion() {
   if (nextButton.disabled) return;
 
+  if (reviewMode) {
+    nextReviewQuestion();
+    return;
+  }
+
   currentIndex++;
 
   if (currentIndex >= QUIZ_LENGTH) {
-    showResults();
+    maybeStartReviewRound();
     return;
   }
 
   showQuestion();
 }
 
+/* ============================
+   Review round
+   ============================ */
+
+function maybeStartReviewRound() {
+  const mistakes = getMistakes();
+
+  if (!REVIEW_ROUND_ENABLED || !mistakes.length) {
+    showResults();
+    return;
+  }
+
+  reviewQuestions = mistakes.map((item, index) => ({
+    originalHistoryIndex: history.indexOf(item),
+    historyEntry: item,
+    question: item.question
+  }));
+
+  reviewQuestions = shuffle(reviewQuestions);
+  reviewIndex = 0;
+  reviewHistory = [];
+
+  startReviewRound();
+}
+
+function startReviewRound() {
+  reviewMode = true;
+  locked = false;
+
+  quizEyebrow.textContent = "Review Round";
+  applyDifficultyUI();
+
+  showReviewQuestion();
+}
+
+function showReviewQuestion() {
+  locked = false;
+  reviewMode = true;
+
+  const item = reviewQuestions[reviewIndex];
+  const q = item.question;
+
+  quizEyebrow.textContent = "Review Round";
+  roundTitle.textContent = `Review ${reviewIndex + 1} / ${reviewQuestions.length}`;
+  liveScore.textContent = `${reviewHistory.filter(r => r.correct).length}/${reviewQuestions.length}`;
+
+  feedbackBox.classList.add("hidden");
+  feedbackBox.innerHTML = "";
+
+  checkButton.textContent = "Check review answer";
+  checkButton.classList.remove("hidden");
+
+  nextButton.textContent =
+    reviewIndex >= reviewQuestions.length - 1 ? "Show final results" : "Next review image";
+  nextButton.classList.add("hidden");
+  nextButton.disabled = false;
+  nextButton.classList.remove("disabled");
+
+  applyDifficultyUI();
+  loadQuizImage(q);
+  resetReviewDropdown();
+}
+
+function checkReviewAnswer() {
+  if (locked) return;
+  if (!validateGuessBeforeCheck()) return;
+
+  locked = true;
+
+  const item = reviewQuestions[reviewIndex];
+  const q = item.question;
+  const guessedLens = lensSelect.value;
+  const correct = guessedLens === q.lens;
+
+  reviewHistory.push({
+    originalHistoryIndex: item.originalHistoryIndex,
+    question: q,
+    guessedLens,
+    correct
+  });
+
+  feedbackBox.innerHTML = `
+    <h3>${correct ? "Nice — you recognized it this time." : "Still tricky."}</h3>
+
+    <div class="feedback-line">
+      <strong>Your review guess</strong>
+      <span class="${correct ? "good" : "bad"}">
+        ${escapeHTML(guessedLens)}
+      </span>
+    </div>
+
+    <div class="correct-answer">
+      <strong>Correct answer:</strong><br>
+      ${escapeHTML(q.lens)} — ${escapeHTML(q.uiFocal)} — T${escapeHTML(q.tStop)}
+      <br><small>Scene: ${escapeHTML(q.scene || "")}</small>
+      <br><br>
+      <small>This review round does not affect your score.</small>
+    </div>
+  `;
+
+  feedbackBox.classList.remove("hidden");
+
+  checkButton.classList.add("hidden");
+  nextButton.classList.remove("hidden");
+
+  liveScore.textContent = `${reviewHistory.filter(r => r.correct).length}/${reviewQuestions.length}`;
+}
+
+function nextReviewQuestion() {
+  reviewIndex++;
+
+  if (reviewIndex >= reviewQuestions.length) {
+    showResults();
+    return;
+  }
+
+  showReviewQuestion();
+}
+
+/* ============================
+   Results
+   ============================ */
+
 function showResults() {
+  reviewMode = false;
+
   quizScreen.classList.add("hidden");
   resultScreen.classList.remove("hidden");
 
   const pct = Math.round((score / maxScore) * 100);
+  const mistakes = getMistakes();
+  const reviewCorrect = reviewHistory.filter(r => r.correct).length;
 
   resultTitle.textContent = `${score} / ${maxScore} points`;
-  resultText.textContent = `You scored ${pct}% in ${difficulty.toUpperCase()} mode.`;
+  resultText.textContent = `You scored ${pct}% in ${difficulty.toUpperCase()} mode. The review round did not affect your score.`;
 
   const lensHits = history.filter(h => h.lensGood).length;
   const focalHits = history.filter(h => h.focalGood).length;
   const tstopHits = history.filter(h => h.tstopGood).length;
-
-  const mistakes = getMistakes();
 
   let rows = `
     <div class="breakdown-row">
@@ -1122,6 +1386,11 @@ function showResults() {
 
   if (mistakes.length) {
     rows += `
+      <div class="breakdown-row">
+        <span>Review round correct</span>
+        <strong>${reviewCorrect} / ${mistakes.length}</strong>
+      </div>
+
       <div class="mistakes-summary">
         <div class="mistakes-summary-top">
           <h2>Your mistakes & memory notes</h2>
@@ -1138,6 +1407,8 @@ function showResults() {
             item.guessedFocal || "No focal",
             item.guessedTStop ? `T${item.guessedTStop}` : "No T-stop"
           ];
+
+          const review = reviewHistory.find(r => r.originalHistoryIndex === history.indexOf(item));
 
           return `
             <div class="mistake-card mistake-card-with-image">
@@ -1166,8 +1437,17 @@ function showResults() {
                 </p>
 
                 <p>
-                  <strong>Your guess:</strong><br>
+                  <strong>Your first guess:</strong><br>
                   ${escapeHTML(guessedParts.join(" — "))}
+                </p>
+
+                <p>
+                  <strong>Review round:</strong><br>
+                  ${
+                    review
+                      ? `${review.correct ? "Correct" : "Wrong"} — you chose ${escapeHTML(review.guessedLens)}`
+                      : "Not reviewed"
+                  }
                 </p>
 
                 <p>
@@ -1184,7 +1464,7 @@ function showResults() {
     rows += `
       <div class="mistakes-summary">
         <h2>No mistakes</h2>
-        <p class="perfect-score">Clean run. No memory notes needed.</p>
+        <p class="perfect-score">Clean run. No review round needed.</p>
       </div>
     `;
   }
